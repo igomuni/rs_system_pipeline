@@ -1,0 +1,77 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs
+*.log
+logs/
+pipeline.log
+
+# Data files (元データは除外)
+data/download/*.xlsx
+data/download/*.zip
+data/download/RS_2024/*
+
+# Output files (生成物は除外)
+output/
+*.csv
+*.json
+
+# Intermediate data
+data/raw/
+data/normalized/
+data/processed/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Debug and test files
+debug_*.py
+stats.py
+check_id_ranges.py
+test_stage*.sh
+stage*.log
