@@ -59,6 +59,10 @@ output/
 *.csv
 *.json
 
+# Quality reports (統合レポートは含める、年度別は除外)
+!data_quality/DATA_QUALITY_REPORT.md
+data_quality/reports/*.md
+
 # Intermediate data
 data/raw/
 data/normalized/

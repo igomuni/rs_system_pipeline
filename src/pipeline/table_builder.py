@@ -223,8 +223,12 @@ class TableBuilder:
         all_budget_records = []
 
         # 予算年度パターンを探す
-        # 4桁西暦、令和/平成+数字、または2桁年度（平成と仮定）
-        budget_year_pattern = re.compile(r'(\d{4})年度|令和(\d+)年度|平成(\d+)年度|-(\d{2})年度')
+        # 4桁西暦、令和/平成+数字、または1-2桁年度（-NN年度-形式）
+        budget_year_pattern = re.compile(r'(\d{4})年度|令和(\d+)年度|令和元年度|平成(\d+)年度|-(\d{1,2})年度-')
+
+        # 事前に全カラムをスキャンして令和時代かどうか判定
+        all_columns_str = ''.join(str(col) for col in columns)
+        is_reiwa_era = '令和元年度' in all_columns_str or '令和' in all_columns_str
 
         # 予算関連カラムを特定（列マッピングを1回だけ実行）
         budget_col_map = {}
@@ -236,13 +240,30 @@ class TableBuilder:
             if match:
                 if match.group(1):  # 西暦4桁
                     budget_year = int(match.group(1))
-                elif match.group(2):  # 令和
+                elif match.group(2):  # 令和N年度
                     budget_year = 2018 + int(match.group(2))
-                elif match.group(3):  # 平成
+                elif '令和元年度' in col_str:  # 令和元年度
+                    budget_year = 2019
+                elif match.group(3):  # 平成N年度
                     budget_year = 1988 + int(match.group(3))
-                elif match.group(4):  # 2桁年度（平成と仮定）
-                    two_digit = int(match.group(4))
-                    budget_year = 1988 + two_digit
+                elif match.group(4):  # -NN年度-形式（1-2桁）
+                    year_num = int(match.group(4))
+                    # 年度番号から推測：
+                    # - 令和は2019年開始（元年=1年目）なので、小さい数字（1-10程度）
+                    # - 平成は1989年開始なので、大きい数字（20-31）
+                    # ヒューリスティック：年度番号が20以上なら平成、それ以外は文書全体を見て判断
+                    if year_num >= 20:
+                        # 平成時代（20年度以上は令和ではありえない）
+                        budget_year = 1988 + year_num
+                    elif is_reiwa_era:
+                        # 令和時代のファイルで1-19の小さい数字
+                        if year_num == 1:
+                            budget_year = 2019  # 令和元年
+                        else:
+                            budget_year = 2018 + year_num
+                    else:
+                        # 平成時代
+                        budget_year = 1988 + year_num
                 else:
                     continue
 
@@ -280,21 +301,44 @@ class TableBuilder:
                 record['予算年度'] = budget_year
 
                 # 予算データを抽出
+                has_data = False  # 実際にデータがあるかチェック
                 for key, col in cols.items():
                     if key == '当初予算':
-                        record['当初予算(合計)'] = self._parse_number(row[col])
+                        value = self._parse_number(row[col])
+                        record['当初予算(合計)'] = value
+                        # NaNでなく、かつ0でない場合にデータありと判定
+                        if pd.notna(value) and value != 0:
+                            has_data = True
                     elif key == '補正予算':
-                        record['補正予算(合計)'] = self._parse_number(row[col])
+                        value = self._parse_number(row[col])
+                        record['補正予算(合計)'] = value
+                        if pd.notna(value) and value != 0:
+                            has_data = True
                     elif key == '繰越':
-                        record['前年度からの繰越し(合計)'] = self._parse_number(row[col])
+                        value = self._parse_number(row[col])
+                        record['前年度からの繰越し(合計)'] = value
+                        if pd.notna(value) and value != 0:
+                            has_data = True
                     elif key == '執行額':
-                        record['執行額(合計)'] = self._parse_number(row[col])
+                        value = self._parse_number(row[col])
+                        record['執行額(合計)'] = value
+                        # NaNでなく、かつ0でない場合にデータありと判定
+                        if pd.notna(value) and value != 0:
+                            has_data = True
                     elif key == '執行率':
-                        record['執行率'] = self._parse_number(row[col])
+                        value = self._parse_number(row[col])
+                        record['執行率'] = value
+                        if pd.notna(value) and value != 0:
+                            has_data = True
                     elif key == '予算合計':
-                        record['計(歳出予算現額合計)'] = self._parse_number(row[col])
+                        value = self._parse_number(row[col])
+                        record['計(歳出予算現額合計)'] = value
+                        if pd.notna(value) and value != 0:
+                            has_data = True
 
-                all_budget_records.append(record)
+                # データが実際に存在する年度のみレコードを追加
+                if has_data:
+                    all_budget_records.append(record)
 
         if all_budget_records:
             return pd.DataFrame(all_budget_records)
