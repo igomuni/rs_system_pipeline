@@ -64,7 +64,7 @@ def generate_overall_summary():
             '事業数': business_count,
             '予算レコード': budget_records,
             '支出先件数': exp_records,
-            'ファイル合計(MB)': round(total_size_mb, 1)
+            'ファイル合計(MB)': int(round(total_size_mb))
         })
 
         if budget_file.exists():
