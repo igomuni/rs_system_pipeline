@@ -102,9 +102,24 @@ Each year uses sequential numbering (1-N). This ID links all 3 tables for a give
 ### Empty Data Filtering (v1.0.3+)
 Budget records are filtered to include only years with actual data, reducing output by ~70% while maintaining data integrity.
 
+### Data Unit Differences ⚠️
+
+**CRITICAL**: Data has different monetary units depending on the source:
+
+| Data Source | Years | Unit | Example |
+|-------------|-------|------|---------|
+| Historical Reviews (Excel/ZIP) | 2014-2023 | **Million Yen** | `29` = 29 million yen |
+| RS System 2024 | 2024+ | **Yen (1円)** | `29,457,000` = ~29.46 million yen |
+
+**Impact**: Direct comparison between 2014-2023 and 2024+ data will show 1,000,000x difference. Always convert units before comparison.
+
 ### Known Data Quality Issues
 
-**2014**: Some projects have unit errors (~1,000,000x inflation) in budget/expenditure data
+**2014**: Some projects have unit errors (~1,000x inflation) in budget/expenditure data
+- Example: 電源立地地域対策交付金 shows 7.3 trillion yen (likely 7.3 billion yen)
+- 64 records with budget > 10 trillion yen (百万円単位)
+- **Policy**: Keep original values without correction; document in quality reports
+
 **2016**: Expenditure data shows potential unit errors
 
 Always run `python data_quality/generate_quality_report.py` after processing to verify data quality.
@@ -118,6 +133,37 @@ The pipeline can run as a web service:
 - **POST /api/pipeline/cancel/{job_id}**: Cancel job
 - **GET /api/results/{filename}**: Download processed files
 
+## Data Quality & Validation Tools
+
+### Budget Continuity Validation
+```bash
+# Validate cross-year project continuity (2019-2024)
+python data_quality/validate_budget_continuity.py
+
+# Generates:
+# - data_quality/budget_continuity_validation.md
+# - Year-over-year continuation rates
+# - All-year continuing projects (1,653 projects across 2019-2024)
+```
+
+### RS System Conversion Gap Analysis
+```bash
+# Analyze gap between current output and RS System 2024 format
+python data_quality/analyze_rs_conversion_gap.py
+
+# Generates:
+# - data_quality/rs_conversion_gap_2023.md
+# - File-by-file comparison (current 3 files vs RS System 15 files)
+# - Column difference details
+```
+
+**Key Findings**:
+- Current output: 3 files per year (1-2, 2-1, 5-1)
+- RS System 2024: 15 files with expanded columns
+- Gap: 12 new files + column additions to existing files
+
+See `data_quality/rs_conversion_gap_2023.md` for conversion roadmap.
+
 ## Testing Workflow
 
 No formal test suite exists yet. Verify changes by:
@@ -125,3 +171,57 @@ No formal test suite exists yet. Verify changes by:
 2. Generate quality reports: `python data_quality/generate_quality_report.py`
 3. Review `data_quality/DATA_QUALITY_REPORT.md` for anomalies
 4. Check output files in `output/processed/year_*/`
+
+## Next Tasks (TODO)
+
+### Phase 1: Extend Existing Files to RS System Format (High Priority)
+
+**Objective**: Expand current 3-file output (1-2, 2-1, 5-1) to match RS System 2024 column structure for 2023 data.
+
+**Files to Update**:
+1. **1-2_基本情報_事業概要**: Add 16 columns
+   - 主要経費, 事業の概要, 事業区分, 事業概要URL, etc.
+   - Extract from original 2023 Excel data
+
+2. **2-1_予算・執行_サマリ**: Add 26 columns
+   - 会計区分, 会計, 勘定, 執行率, 翌年度要求額, etc.
+   - Extract from original 2023 Excel data
+   - **IMPORTANT**: Convert monetary units (million yen → yen, multiply by 1,000,000)
+
+3. **5-1_支出先_支出情報**: Add 9 columns
+   - 法人種別, 所在地, 具体的な契約方式等, etc.
+   - Extract from original 2023 Excel data
+   - **IMPORTANT**: Convert monetary units (million yen → yen, multiply by 1,000,000)
+
+**Implementation Steps**:
+1. Analyze original 2023 Excel file structure (`data/download/`)
+2. Update `src/pipeline/table_builder.py` to extract additional columns
+3. Test with 2023 data only
+4. Validate column mapping and data integrity
+5. Apply to all years (2014-2023) once validated
+
+**Reference**: See `data_quality/rs_conversion_gap_2023.md` for detailed column lists.
+
+### Phase 2: Create New File Types (Lower Priority)
+
+**Objective**: Generate 12 additional file types to match full RS System 2024 structure.
+
+**New Files to Create**:
+- 1-1_組織情報 (22 columns)
+- 1-3_政策・施策、法令等 (28 columns)
+- 1-4_補助率等 (18 columns)
+- 1-5_関連事業 (17 columns)
+- 2-2_予算種別・歳出予算項目 (26 columns)
+- 3-1_効果発現経路_目標・実績 (82 columns)
+- 3-2_効果発現経路_目標のつながり (23 columns)
+- 4-1_点検・評価 (37 columns)
+- 5-2_支出ブロックのつながり (22 columns)
+- 5-3_費目・使途 (20 columns)
+- 5-4_国庫債務負担行為等による契約 (27 columns)
+- 6-1_その他備考 (14 columns)
+
+**Note**: This phase requires extensive analysis of original Excel file structure and may not be necessary unless full RS System compatibility is required.
+
+### Phase 3: Apply to All Years (2014-2023)
+
+Once Phase 1 is validated with 2023 data, apply the same transformations to all historical years.
