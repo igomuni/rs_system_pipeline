@@ -79,3 +79,4 @@ stats.py
 check_id_ranges.py
 test_stage*.sh
 stage*.log
+test_*.log

@@ -202,25 +202,40 @@ No formal test suite exists yet. Verify changes by:
 
 **Reference**: See `data_quality/rs_conversion_gap_2023.md` for detailed column lists.
 
-### Phase 2: Create New File Types (Lower Priority)
+### Phase 2: Create New File Types ✅ **COMPLETED (75%)**
 
 **Objective**: Generate 12 additional file types to match full RS System 2024 structure.
 
-**New Files to Create**:
-- 1-1_組織情報 (22 columns)
-- 1-3_政策・施策、法令等 (28 columns)
-- 1-4_補助率等 (18 columns)
-- 1-5_関連事業 (17 columns)
-- 2-2_予算種別・歳出予算項目 (26 columns)
-- 3-1_効果発現経路_目標・実績 (82 columns)
-- 3-2_効果発現経路_目標のつながり (23 columns)
-- 4-1_点検・評価 (37 columns)
-- 5-2_支出ブロックのつながり (22 columns)
-- 5-3_費目・使途 (20 columns)
-- 5-4_国庫債務負担行為等による契約 (27 columns)
-- 6-1_その他備考 (14 columns)
+**Implementation Status** (9/12 files completed):
 
-**Note**: This phase requires extensive analysis of original Excel file structure and may not be necessary unless full RS System compatibility is required.
+✅ **Completed Files**:
+1. **6-1_その他備考** (14 columns) - 基本実装、備考フィールド抽出
+2. **1-1_組織情報** (22 columns) - 組織階層情報の構造化
+3. **1-4_補助率等** (18 columns) - テキストパース、補助率情報抽出
+4. **1-3_政策・施策、法令等** (28 columns) - 政策体系・法令情報
+5. **2-2_予算種別・歳出予算項目** (26 columns) - 予算種別の詳細展開
+6. **4-1_点検・評価** (37 columns) - 評価結果・改善方針
+7. **1-5_関連事業** (17 columns) - 関連事業情報（統合・分割等）
+8. **5-3_費目・使途** (20 columns) - 費目別使途詳細
+9. **5-4_国庫債務負担行為等による契約** (27 columns) - 複数年度契約情報
+
+❌ **実装見送り（データ不足）**:
+- **5-2_支出ブロックのつながり** (22 columns) - 元データに複数ブロック間の関連情報が存在せず実装不可
+
+⏭️ **スキップ（複雑性vs価値）**:
+- **3-1_効果発現経路_目標・実績** (82 columns) - 82列の複雑な構造、実用性低い
+- **3-2_効果発現経路_目標のつながり** (23 columns) - 3-1に依存、実装見送り
+
+**実装箇所**: `src/pipeline/table_builder.py` 内の各メソッド
+- `build_remarks_table()` (6-1)
+- `build_organization_table()` (1-1)
+- `build_subsidy_rate_table()` (1-4)
+- `build_policy_law_table()` (1-3)
+- `build_budget_type_table()` (2-2)
+- `build_review_evaluation_table()` (4-1)
+- `build_related_projects_table()` (1-5)
+- `build_expense_purpose_table()` (5-3)
+- `build_multi_year_contract_table()` (5-4)
 
 ### Phase 3: Apply to All Years (2014-2023)
 
