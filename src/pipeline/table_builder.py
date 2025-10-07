@@ -1329,17 +1329,35 @@ class TableBuilder:
         columns = df.columns.tolist()
 
         # 歳出予算項・目列を動的検出（正規表現）
-        # パターン: 2023・2024年度予算内訳（単位：百万円）-歳出予算項・目-{（項）,（目）,令和5年度当初予算,令和6年度要求}-{01-10}
+        # パターン1 (2023年): 2023・2024年度予算内訳（単位：百万円）-歳出予算項・目-{（項）,（目）,令和5年度当初予算,令和6年度要求}-{01-10}
+        # パターン2 (2022年): 2022・2023年度予算内訳（単位：百万円）-{歳出予算目,2022年度当初予算,2023年度要求}-{01-10}
         import re
         budget_cols = []
-        pattern = re.compile(r'予算内訳.*歳出予算項・目-(.*)-(\d{2})')
+        pattern_2023 = re.compile(r'予算内訳.*歳出予算項・目-(.*)-(\d{2})')
+        pattern_2022 = re.compile(r'予算内訳.*-(歳出予算目|20\d{2}年度当初予算|20\d{2}年度要求)-(\d{2})')
 
         for col in columns:
             col_str = str(col)
-            match = pattern.search(col_str)
+            # 2023年形式を試す
+            match = pattern_2023.search(col_str)
             if match:
                 field_type = match.group(1)  # （項）, （目）, 令和N年度当初予算, etc.
                 seq = int(match.group(2))  # 01-10
+                budget_cols.append((col, field_type, seq))
+                continue
+
+            # 2022年形式を試す
+            match = pattern_2022.search(col_str)
+            if match:
+                field_type = match.group(1)  # 歳出予算目, 2022年度当初予算, etc.
+                seq = int(match.group(2))  # 01-10
+                # 2022年形式を2023年形式にマッピング
+                if '歳出予算目' in field_type:
+                    field_type = '（目）'
+                elif '当初予算' in field_type:
+                    field_type = '当初予算'
+                elif '要求' in field_type:
+                    field_type = '要求'
                 budget_cols.append((col, field_type, seq))
 
         if not budget_cols:
@@ -1401,17 +1419,17 @@ class TableBuilder:
                     if pd.notna(val) and str(val).strip() != '' and str(val).strip() != '-':
                         item_moku = str(val).strip()
 
-                # 令和5年度当初予算（2023年度）
+                # 当初予算（令和5年度または2022年度など）
                 for key in field_cols.keys():
-                    if '令和5年度' in key or '当初予算' in key:
+                    if '当初予算' in key:
                         val = row[field_cols[key]]
                         if pd.notna(val) and str(val).strip() != '' and str(val).strip() != '-':
                             current_budget = str(val).strip()
                             break
 
-                # 令和6年度要求（2024年度）
+                # 要求（令和6年度または2023年度など）
                 for key in field_cols.keys():
-                    if '令和6年度' in key or '要求' in key:
+                    if '要求' in key:
                         val = row[field_cols[key]]
                         if pd.notna(val) and str(val).strip() != '' and str(val).strip() != '-':
                             next_budget = str(val).strip()
