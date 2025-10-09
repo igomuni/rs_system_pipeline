@@ -4,12 +4,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This pipeline converts historical administrative review data (行政事業レビュー, 2014-2023) from various Excel/ZIP formats into standardized CSV files compatible with the RS System format. The output consists of 3 normalized tables per year:
+This pipeline converts historical administrative review data (行政事業レビュー, 2014-2023) from various Excel/ZIP formats into standardized CSV files compatible with the RS System 2024 format. **Phase 2 completed (75%)**: The output now consists of **12 normalized tables per year** (9 newly implemented + 3 core tables):
+
+**Core Tables (1-2, 2-1, 5-1)**:
 - **1-2_基本情報_事業概要.csv**: Basic project information (~5,000 projects/year)
 - **2-1_予算・執行_サマリ.csv**: Budget and execution summary (multi-year data per project)
 - **5-1_支出先_支出情報.csv**: Expenditure details (top 10 recipients per project)
 
-Each year's data uses sequential IDs (1-N) to link the three tables via `予算事業ID`.
+**New Tables (Phase 2, 9 files)**:
+- **1-1_組織情報.csv**: Organization hierarchy (22 columns)
+- **1-3_政策・施策、法令等.csv**: Policy system and legal basis (28 columns)
+- **1-4_補助率等.csv**: Subsidy rates (18 columns)
+- **1-5_関連事業.csv**: Related projects (17 columns)
+- **2-2_予算種別・歳出予算項目.csv**: Budget type details (26 columns)
+- **4-1_点検・評価.csv**: Review and evaluation (37 columns)
+- **5-3_費目・使途.csv**: Expense purposes (20 columns)
+- **5-4_国庫債務負担行為等による契約.csv**: Multi-year contracts (27 columns)
+- **6-1_その他備考.csv**: Remarks (14 columns)
+
+Each year's data uses sequential IDs (1-N) to link all 12 tables via `予算事業ID`.
 
 ## Common Commands
 
@@ -59,8 +72,11 @@ pip install -r requirements.txt
 
 **Stage 3: RS System Table Splitting** (Stage03_ProcessTables)
 - Delegates to `src/pipeline/table_builder.py:process_year_data()`
-- Creates 3 standardized tables per year with unified `予算事業ID`
+- Creates **12 standardized tables per year** with unified `予算事業ID` (Phase 2 completed, 75% implementation)
 - Filters empty budget records to reduce file size (~70% reduction in v1.0.3)
+- Implemented table builders:
+  - Core 3 files: `build_overview_table()`, `build_budget_table()`, `build_expenditure_table()`
+  - New 9 files: `build_organization_table()`, `build_policy_law_table()`, `build_subsidy_rate_table()`, `build_related_projects_table()`, `build_budget_type_table()`, `build_review_evaluation_table()`, `build_expense_purpose_table()`, `build_multi_year_contract_table()`, `build_remarks_table()`
 
 **Stage 4: Schema Generation** (Stage04_GenerateSchema)
 - Generates JSON schema definitions for each table
@@ -82,7 +98,7 @@ output/raw/year_YYYY/*.csv
   ↓ Stage 2
 output/normalized/year_YYYY/*.csv
   ↓ Stage 3
-output/processed/year_YYYY/{1-2_基本情報_事業概要, 2-1_予算・執行_サマリ, 5-1_支出先_支出情報}.csv
+output/processed/year_YYYY/{1-1_組織情報, 1-2_基本情報_事業概要, 1-3_政策・施策・法令等, 1-4_補助率等, 1-5_関連事業, 2-1_予算・執行_サマリ, 2-2_予算種別・歳出予算項目, 4-1_点検・評価, 5-1_支出先_支出情報, 5-3_費目・使途, 5-4_国庫債務負担行為等による契約, 6-1_その他備考}.csv (12 files)
   ↓ Stage 4
 output/schema/*.json
 ```
@@ -97,7 +113,7 @@ output/schema/*.json
 ## Key Data Processing Logic
 
 ### Budget Event ID (予算事業ID)
-Each year uses sequential numbering (1-N). This ID links all 3 tables for a given project within that year.
+Each year uses sequential numbering (1-N). This ID links all **12 tables** for a given project within that year (Phase 2 completed).
 
 ### Empty Data Filtering (v1.0.3+)
 Budget records are filtered to include only years with actual data, reducing output by ~70% while maintaining data integrity.
@@ -131,7 +147,7 @@ The pipeline can run as a web service:
 - **GET /api/pipeline/status/{job_id}**: Check job status
 - **GET /api/pipeline/jobs**: List all jobs
 - **POST /api/pipeline/cancel/{job_id}**: Cancel job
-- **GET /api/results/{filename}**: Download processed files
+- **GET /api/results/{filename:path}**: Download processed files (supports subdirectories, with path traversal protection)
 
 ## Data Quality & Validation Tools
 
@@ -158,11 +174,13 @@ python data_quality/analyze_rs_conversion_gap.py
 ```
 
 **Key Findings**:
-- Current output: 3 files per year (1-2, 2-1, 5-1)
+- ~~Current output: 3 files per year (1-2, 2-1, 5-1)~~ **Updated: Now 12 files per year (Phase 2 completed)**
 - RS System 2024: 15 files with expanded columns
-- Gap: 12 new files + column additions to existing files
+- ~~Gap: 12 new files + column additions to existing files~~ **Updated: 9 new files implemented, 3 skipped**
+  - ✅ Implemented: 1-1, 1-3, 1-4, 1-5, 2-2, 4-1, 5-3, 5-4, 6-1 (9 files)
+  - ❌ Skipped: 5-2 (no source data), 3-1/3-2 (complexity vs. utility)
 
-See `data_quality/rs_conversion_gap_2023.md` for conversion roadmap.
+See `data_quality/rs_conversion_gap_2023.md` for original analysis.
 
 ## Testing Workflow
 
@@ -174,31 +192,18 @@ No formal test suite exists yet. Verify changes by:
 
 ## Next Tasks (TODO)
 
-### Phase 1: Extend Existing Files to RS System Format (High Priority)
+### Phase 1: Extend Existing Files to RS System Format ⏭️ **DEFERRED**
 
-**Objective**: Expand current 3-file output (1-2, 2-1, 5-1) to match RS System 2024 column structure for 2023 data.
+**Status**: Deferred in favor of completing Phase 2 (new file types) first.
+
+**Objective**: Expand core 3-file output (1-2, 2-1, 5-1) to match RS System 2024 column structure.
 
 **Files to Update**:
-1. **1-2_基本情報_事業概要**: Add 16 columns
-   - 主要経費, 事業の概要, 事業区分, 事業概要URL, etc.
-   - Extract from original 2023 Excel data
+1. **1-2_基本情報_事業概要**: Add 16 columns (主要経費, 事業の概要, etc.)
+2. **2-1_予算・執行_サマリ**: Add 26 columns (会計区分, 会計, 勘定, etc.)
+3. **5-1_支出先_支出情報**: Add 9 columns (法人種別, 所在地, etc.)
 
-2. **2-1_予算・執行_サマリ**: Add 26 columns
-   - 会計区分, 会計, 勘定, 執行率, 翌年度要求額, etc.
-   - Extract from original 2023 Excel data
-   - **IMPORTANT**: Convert monetary units (million yen → yen, multiply by 1,000,000)
-
-3. **5-1_支出先_支出情報**: Add 9 columns
-   - 法人種別, 所在地, 具体的な契約方式等, etc.
-   - Extract from original 2023 Excel data
-   - **IMPORTANT**: Convert monetary units (million yen → yen, multiply by 1,000,000)
-
-**Implementation Steps**:
-1. Analyze original 2023 Excel file structure (`data/download/`)
-2. Update `src/pipeline/table_builder.py` to extract additional columns
-3. Test with 2023 data only
-4. Validate column mapping and data integrity
-5. Apply to all years (2014-2023) once validated
+**Note**: Monetary unit conversion (million yen → yen) is **NOT recommended** for historical data (2014-2023) to maintain consistency. Units should be converted only when merging with RS System 2024+ data.
 
 **Reference**: See `data_quality/rs_conversion_gap_2023.md` for detailed column lists.
 

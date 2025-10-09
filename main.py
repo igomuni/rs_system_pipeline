@@ -35,6 +35,15 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+
+def _ensure_directories():
+    """必要なディレクトリを作成"""
+    for directory in [DATA_DIR, DOWNLOAD_DIR, OUTPUT_DIR, RAW_DIR,
+                     NORMALIZED_DIR, PROCESSED_DIR, SCHEMA_DIR]:
+        directory.mkdir(parents=True, exist_ok=True)
+        logger.info(f"Ensured directory exists: {directory}")
+
+
 # FastAPIアプリ
 app = FastAPI(
     title="RS System Pipeline API",
@@ -51,11 +60,7 @@ class PipelineRequest(BaseModel):
 @app.on_event("startup")
 async def startup_event():
     """起動時の処理"""
-    # 必要なディレクトリを作成
-    for directory in [DATA_DIR, DOWNLOAD_DIR, OUTPUT_DIR, RAW_DIR,
-                     NORMALIZED_DIR, PROCESSED_DIR, SCHEMA_DIR]:
-        directory.mkdir(parents=True, exist_ok=True)
-        logger.info(f"Ensured directory exists: {directory}")
+    _ensure_directories()
 
 
 @app.get("/")
@@ -152,23 +157,27 @@ async def cancel_job(job_id: str):
     })
 
 
-@app.get("/api/results/{filename}")
+@app.get("/api/results/{filename:path}")
 async def download_result(filename: str):
     """
     処理済みファイルをダウンロード
 
     Args:
-        filename: ファイル名
+        filename: ファイル名（パス区切りを含む場合もあり）
 
     Returns:
         ファイルレスポンス
     """
-    file_path = PROCESSED_DIR / filename
+    # パストラバーサル攻撃を防ぐため、絶対パス化して親ディレクトリをチェック
+    file_path = (PROCESSED_DIR / filename).resolve()
+
+    if not file_path.is_relative_to(PROCESSED_DIR.resolve()):
+        raise HTTPException(status_code=400, detail="Invalid file path")
 
     if not file_path.exists():
         raise HTTPException(status_code=404, detail=f"File {filename} not found")
 
-    return FileResponse(file_path, filename=filename)
+    return FileResponse(file_path, filename=file_path.name)
 
 
 def cli_main():
@@ -208,7 +217,9 @@ def cli_main():
         import uvicorn
         uvicorn.run(app, host=args.host, port=args.port)
     else:
-        # CLI実行
+        # CLI実行: 必要なディレクトリを作成
+        _ensure_directories()
+
         logger.info(f"Starting pipeline from stage {args.stage}")
         job_id = pipeline_manager.create_job(args.stage)
         success = pipeline_manager.run_pipeline(job_id)
