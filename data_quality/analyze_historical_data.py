@@ -15,17 +15,37 @@ import sys
 
 project_root = Path(__file__).parent.parent
 output_dir = project_root / "output" / "processed"
+rs_data_dir = project_root / "data" / "unzipped"
 
 
 def load_all_overview_data() -> pd.DataFrame:
-    """全年度の基本情報データを読み込み"""
+    """全年度の基本情報データを読み込み（2014-2024）"""
     dfs = []
+
+    # 2014-2023年度（過去データ）
     for year in range(2014, 2024):
         file_path = output_dir / f"year_{year}" / f"1-2_{year}_基本情報_事業概要.csv"
         if file_path.exists():
             df = pd.read_csv(file_path, encoding='utf-8-sig')
             df['年度'] = year
+            df['データソース'] = '過去データ'
+            # 予算事業IDで重複排除（最初の1件のみ）
+            df = df.drop_duplicates(subset=['予算事業ID'], keep='first')
             dfs.append(df)
+
+    # 2024年度（RSシステムデータ）
+    rs_file = rs_data_dir / "1-2_RS_2024_基本情報_事業概要等.csv"
+    if rs_file.exists():
+        df = pd.read_csv(rs_file, encoding='utf-8-sig')
+        # 列名を統一
+        if '事業年度' in df.columns:
+            df['年度'] = df['事業年度']
+        else:
+            df['年度'] = 2024
+        df['データソース'] = 'RSシステム'
+        # 予算事業IDで重複排除（最初の1件のみ）- 主要経費別に分かれているレコードを統合
+        df = df.drop_duplicates(subset=['予算事業ID'], keep='first')
+        dfs.append(df)
 
     if not dfs:
         raise FileNotFoundError("基本情報データが見つかりません")
@@ -34,14 +54,35 @@ def load_all_overview_data() -> pd.DataFrame:
 
 
 def load_all_budget_data() -> pd.DataFrame:
-    """全年度の予算・執行データを読み込み"""
+    """全年度の予算・執行データを読み込み（2014-2024）"""
     dfs = []
+
+    # 2014-2023年度（過去データ）
     for year in range(2014, 2024):
         file_path = output_dir / f"year_{year}" / f"2-1_{year}_予算・執行_サマリ.csv"
         if file_path.exists():
             df = pd.read_csv(file_path, encoding='utf-8-sig')
             df['データ年度'] = year  # レビューシートの年度
+            df['データソース'] = '過去データ'
             dfs.append(df)
+
+    # 2024年度（RSシステムデータ）
+    rs_file = rs_data_dir / "2-1_RS_2024_予算・執行_サマリ.csv"
+    if rs_file.exists():
+        df = pd.read_csv(rs_file, encoding='utf-8-sig')
+        # データ年度を設定
+        if '事業年度' in df.columns:
+            df['データ年度'] = df['事業年度']
+        else:
+            df['データ年度'] = 2024
+        df['データソース'] = 'RSシステム'
+        # 列名を統一
+        if '当初予算（合計）' in df.columns:
+            df['当初予算(合計)'] = df['当初予算（合計）']
+        # RSシステムは金額単位が「円」なので百万円に変換
+        if df['当初予算(合計)'].max() > 1000000:  # 100万円以上の値があれば円単位
+            df['当初予算(合計)'] = df['当初予算(合計)'] / 1000000
+        dfs.append(df)
 
     if not dfs:
         raise FileNotFoundError("予算・執行データが見つかりません")
@@ -56,34 +97,57 @@ def analyze_largest_budget_projects():
     overview = load_all_overview_data()
     budget = load_all_budget_data()
 
-    # 事業ごとの予算総額を計算（全年度合計）
-    budget_by_project = budget.groupby(['データ年度', '予算事業ID']).agg({
-        '当初予算(合計)': 'sum'
-    }).reset_index()
+    # 各事業の当該年度の予算額のみを取得（予算年度==データ年度）
+    budget_current_year = budget[budget['予算年度'] == budget['データ年度']].copy()
 
-    # 基本情報と結合
-    merged = budget_by_project.merge(
-        overview[['年度', '予算事業ID', '事業名', '府省庁']],
+    # 基本情報と結合（suffixesを明示的に指定）
+    merged = budget_current_year.merge(
+        overview[['年度', '予算事業ID', '事業名', '府省庁', 'データソース']],
         left_on=['データ年度', '予算事業ID'],
         right_on=['年度', '予算事業ID'],
-        how='left'
+        how='left',
+        suffixes=('_budget', '_overview')
     )
 
-    # TOP 20を抽出
-    top20 = merged.nlargest(20, '当初予算(合計)')
+    # 列名を整理（overviewの列を優先）
+    if '事業名_overview' in merged.columns:
+        merged['事業名'] = merged['事業名_overview']
+    if '府省庁_overview' in merged.columns:
+        merged['府省庁'] = merged['府省庁_overview']
+    if 'データソース_overview' in merged.columns:
+        merged['データソース'] = merged['データソース_overview']
+    elif 'データソース_budget' in merged.columns:
+        merged['データソース'] = merged['データソース_budget']
 
-    print("## 全年度における予算額TOP 20\n")
-    print("| 順位 | 年度 | 予算額（百万円） | 事業名 | 府省庁 |")
-    print("|------|------|------------------|--------|--------|")
-    for rank, (idx, row) in enumerate(top20.iterrows(), 1):
+    # 2014年度（単位エラーあり）のTOP 20
+    merged_2014 = merged[merged['データ年度'] == 2014]
+    top20_2014 = merged_2014.nlargest(20, '当初予算(合計)')
+
+    print("## 2014年度 予算額TOP 20\n")
+    print("**注**: 2014年度は単位エラーあり（百万円単位で約1000倍の値が含まれる）\n")
+    print("| 順位 | 予算額（百万円） | 事業名 | 府省庁 |")
+    print("|------|------------------|--------|--------|")
+    for rank, (idx, row) in enumerate(top20_2014.iterrows(), 1):
         budget_str = f"{row['当初予算(合計)']:,.1f}"
         project_name = row['事業名'][:50] + ('...' if len(row['事業名']) > 50 else '')
-        print(f"| {rank} | {row['データ年度']} | {budget_str} | {project_name} | {row['府省庁']} |")
+        print(f"| {rank} | {budget_str} | {project_name} | {row['府省庁']} |")
 
-    # 年度別TOP 3
-    print("\n## 年度別TOP 3\n")
-    for year in range(2014, 2024):
-        year_data = merged[merged['データ年度'] == year].nlargest(3, '当初予算(合計)')
+    # 2015-2024年度のTOP 20
+    merged_2015_2024 = merged[merged['データ年度'] >= 2015]
+    top20_2015_2024 = merged_2015_2024.nlargest(20, '当初予算(合計)')
+
+    print("\n## 2015-2024年度 予算額TOP 20\n")
+    print("| 順位 | 年度 | 予算額（百万円） | 事業名 | 府省庁 | データソース |")
+    print("|------|------|------------------|--------|--------|-------------|")
+    for rank, (idx, row) in enumerate(top20_2015_2024.iterrows(), 1):
+        budget_str = f"{row['当初予算(合計)']:,.1f}"
+        project_name = row['事業名'][:45] + ('...' if len(row['事業名']) > 45 else '')
+        print(f"| {rank} | {row['データ年度']} | {budget_str} | {project_name} | {row['府省庁']} | {row['データソース']} |")
+
+    # 年度別TOP 10
+    print("\n## 年度別TOP 10\n")
+    for year in range(2014, 2025):
+        year_data = merged[merged['データ年度'] == year].nlargest(10, '当初予算(合計)')
         if len(year_data) > 0:
             print(f"### {year}年度\n")
             print("| 順位 | 予算額（百万円） | 事業名 | 府省庁 |")
@@ -104,17 +168,24 @@ def analyze_continuous_projects():
 
     # 事業名ごとに存在する年度数をカウント
     project_years = overview.groupby('事業名')['年度'].agg(['count', 'min', 'max', list]).reset_index()
-    project_years.columns = ['事業名', '年度数', '開始年度', '終了年度', '年度リスト']
+    project_years.columns = ['事業名', '年度数', 'データ開始年度', 'データ終了年度', '年度リスト']
+
+    # 全11年度（2014-2024）に存在する事業
+    continuous_all = project_years[project_years['年度数'] == 11].sort_values('事業名')
 
     # 全10年度（2014-2023）に存在する事業
-    continuous_projects = project_years[project_years['年度数'] == 10].sort_values('事業名')
+    continuous_10 = project_years[project_years['年度数'] == 10].sort_values('事業名')
 
     print(f"## サマリー\n")
-    print(f"- **全10年度（2014-2023）に継続する事業数**: {len(continuous_projects)}件")
+    print(f"- **全11年度（2014-2024）に継続する事業数**: {len(continuous_all)}件")
+    print(f"- **全10年度（2014-2023）に継続する事業数**: {len(continuous_10)}件")
 
     # 9年度に存在する事業（1年欠けている）
     near_continuous = project_years[project_years['年度数'] == 9].sort_values('事業名')
     print(f"- **9年度に存在する事業数**: {len(near_continuous)}件（参考）\n")
+
+    # 分析対象を11年度継続事業に変更
+    continuous_projects = continuous_all if len(continuous_all) > 0 else continuous_10
 
     # 府省庁別の継続事業数
     if len(continuous_projects) > 0:
@@ -131,14 +202,48 @@ def analyze_continuous_projects():
             print(f"| {rank} | {ministry} | {count}件 |")
 
     if len(continuous_projects) > 0:
-        print("\n## 継続事業リスト（先頭50件）\n")
-        print("| No. | 事業名 |")
-        print("|-----|--------|")
-        for idx, (_, row) in enumerate(continuous_projects.head(50).iterrows(), 1):
-            print(f"| {idx} | {row['事業名']} |")
+        # 実際の「事業開始年度」列を取得（最新のデータを使用）
+        # 事業名ごとに最新年度の事業開始年度を取得
+        project_start_years = overview[overview['事業名'].isin(continuous_projects['事業名'])].copy()
+        # 事業開始年度を数値に変換（NaNや空文字を処理）
+        project_start_years['事業開始年度'] = pd.to_numeric(project_start_years['事業開始年度'], errors='coerce')
+        # 各事業名の最新年度のレコードを取得
+        latest_records = project_start_years.sort_values('年度').groupby('事業名').last().reset_index()
+        # continuous_projectsにマージ
+        continuous_with_start = continuous_projects.merge(
+            latest_records[['事業名', '事業開始年度', '府省庁']],
+            on='事業名',
+            how='left'
+        )
 
-        if len(continuous_projects) > 50:
-            print(f"\n*... 他 {len(continuous_projects) - 50}件*")
+        # 開始年度を10年代に分類
+        continuous_with_start_valid = continuous_with_start.dropna(subset=['事業開始年度']).copy()
+        continuous_with_start_valid['年代'] = (continuous_with_start_valid['事業開始年度'] // 10 * 10).astype(int)
+
+        # 年代ごとのTOP 10を表示（1920年代から）
+        decades = sorted(continuous_with_start_valid['年代'].unique())
+
+        print("\n## 開始年度を10年代ごとに分類（TOP 10）\n")
+
+        for decade in decades:
+            if decade < 1920:  # 1920年代より前は表示しない
+                continue
+
+            decade_projects = continuous_with_start_valid[
+                continuous_with_start_valid['年代'] == decade
+            ].nsmallest(10, '事業開始年度')
+
+            if len(decade_projects) > 0:
+                decade_label = f"{decade}年代"
+                print(f"### {decade_label}\n")
+                print("| 順位 | 事業名 | 事業開始年度 | 府省庁 | データ存在期間 |")
+                print("|------|--------|--------------|--------|----------------|")
+                for rank, (_, row) in enumerate(decade_projects.iterrows(), 1):
+                    project_name = row['事業名'][:45] + ('...' if len(row['事業名']) > 45 else '')
+                    start_year = int(row['事業開始年度'])
+                    data_period = f"{int(row['データ開始年度'])}-{int(row['データ終了年度'])}"
+                    print(f"| {rank} | {project_name} | {start_year} | {row['府省庁']} | {data_period} |")
+                print()
 
 
 def analyze_covid_impact():
@@ -217,8 +322,9 @@ def main():
     """メイン処理"""
     try:
         # ヘッダー
-        print("# 2014-2023年度 行政事業レビューデータ 横断分析レポート\n")
+        print("# 2014-2024年度 行政事業レビューデータ 横断分析レポート\n")
         print(f"**生成日時**: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        print(f"**対象年度**: 2014-2023年度（過去データ） + 2024年度（RSシステムデータ）\n")
         print("---\n")
 
         # 1. 最大予算事業
