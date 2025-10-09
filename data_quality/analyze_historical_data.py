@@ -158,6 +158,161 @@ def analyze_largest_budget_projects():
                 print(f"| {rank} | {budget_str} | {project_name} | {row['府省庁']} |")
             print()
 
+    # 定番大型事業の分析を追加
+    analyze_regular_large_projects(merged, budget)
+
+
+def analyze_regular_large_projects(merged, budget):
+    """定番大型事業の分析"""
+    print("\n## 定番大型事業の分析\n")
+
+    # 事業名の正規化関数
+    def normalize_project_name(name):
+        """事業名の表記ゆれを統一"""
+        # 括弧の統一（全角→半白）
+        name = name.replace('（', '(').replace('）', ')')
+
+        # スラッシュの削除（保険給付に必要な経費／(年金特別会計→保険給付に必要な経費(年金特別会計）
+        name = name.replace('／(', '(').replace('／（', '(')
+
+        # 括弧前のスペースを削除（`保険給付に必要な経費 (年金...`→`保険給付に必要な経費(年金...`）
+        name = name.replace(' (', '(')
+
+        # 個別の表記ゆれを統一
+        replacements = {
+            '介護給付費金財政調整交付金': '介護給付費財政調整交付金',
+            '介護給付費等負担金': '介護給付費負担金',
+            '障害者自立支援給付費': '障害者自立支援給付',
+            '失業等給付費等': '失業等給付費',
+            '国立大学法人運営費交付金': '国立大学法人の運営'  # 「運営費交付金」→「運営」に統一
+        }
+
+        for old, new in replacements.items():
+            if old in name:
+                name = name.replace(old, new)
+
+        return name
+
+    # budgetデータの事業名を正規化
+    budget = budget.copy()
+    budget['事業名'] = budget['事業名'].apply(normalize_project_name)
+
+    # mergedデータの事業名を正規化
+    merged = merged.copy()
+    merged['事業名'] = merged['事業名'].apply(normalize_project_name)
+
+    # 定番事業のリスト（事業名の一部でマッチング）
+    regular_projects_patterns = [
+        '基礎年金給付',
+        '保険給付に必要な経費',
+        '医療保険給付費国庫負担金',
+        '保険料等交付金',
+        '保護費負担金',
+        '失業等給付費',
+        '介護給付費',
+        '子どものための教育・保育給付',
+        '義務教育費国庫負担金に必要な経費',  # 「及び標準法実施等」を除外するため具体的に指定
+        '障害者自立支援給付',
+        '児童手当等交付金',
+        '国立大学法人の運営',  # 「国立大学法人の運営に必要な経費」「国立大学法人運営費交付金」両方をカバー
+        '防災・安全交付金',
+        '道路事業(直轄・改築等)',
+        '社会資本整備総合交付金',
+        '国民年金給付',
+        '年金生活者支援給付金の支給に必要な経費'  # 事務費・準備費を除外するため具体的に指定
+    ]
+
+    # 定番事業にマッチする事業名を特定
+    def is_regular_project(project_name):
+        for pattern in regular_projects_patterns:
+            if pattern in project_name:
+                # 細分化事業を除外（カッコ内に詳細が含まれるもの）
+                exclude_patterns = ['防災・安全交付金', '社会資本整備総合交付金']
+                if pattern in exclude_patterns and '(' in project_name:
+                    return False
+                return True
+        return False
+
+    # 定番事業フラグを追加
+    merged['定番事業'] = merged['事業名'].apply(is_regular_project)
+
+    # 定番事業の一覧を取得
+    regular_projects = merged[merged['定番事業']].groupby('事業名').size().reset_index(name='出現回数')
+    regular_projects = regular_projects.sort_values('出現回数', ascending=False)
+
+    print(f"**定番大型事業**: {len(regular_projects)}件\n")
+
+    # 定番事業の年度別予算推移
+    print("### 定番大型事業の予算推移（2014-2024年度）\n")
+
+    # 各事業の年度別予算を取得
+    budget_by_year = budget[budget['予算年度'] == budget['データ年度']].copy()
+    budget_pivot = budget_by_year.groupby(['事業名', 'データ年度']).agg({
+        '当初予算(合計)': 'sum'
+    }).reset_index()
+
+    # 定番事業のみフィルタ
+    regular_budget = budget_pivot[budget_pivot['事業名'].apply(is_regular_project)]
+
+    # ピボットテーブルに変換
+    budget_wide = regular_budget.pivot(index='事業名', columns='データ年度', values='当初予算(合計)')
+
+    # 2024年度予算で降順ソート
+    if 2024 in budget_wide.columns:
+        budget_wide = budget_wide.sort_values(2024, ascending=False)
+
+    # テーブル出力
+    print("| 事業名 | 2014 | 2015 | 2016 | 2017 | 2018 | 2019 | 2020 | 2021 | 2022 | 2023 | 2024 |")
+    print("|--------|------|------|------|------|------|------|------|------|------|------|------|")
+
+    for project_name, row in budget_wide.iterrows():
+        name_short = project_name[:40] + ('...' if len(project_name) > 40 else '')
+        line = f"| {name_short} |"
+        for year in range(2014, 2025):
+            if year in budget_wide.columns:
+                val = row.get(year)
+                if pd.notna(val):
+                    # すべて百万円単位で統一表記
+                    if val >= 1000000:  # 1兆円以上
+                        line += f" {val:,.0f} |"
+                    elif val >= 10:  # 10百万円以上
+                        line += f" {val:,.0f} |"
+                    else:  # 10百万円未満
+                        line += f" {val:.1f} |"
+                else:
+                    line += " - |"
+            else:
+                line += " - |"
+        print(line)
+
+    # 定番事業を除いたTOP 20とTOP 10
+    print("\n### 定番大型事業を除いた予算額TOP 20（2015-2024年度）\n")
+
+    merged_non_regular = merged[~merged['定番事業']]
+    merged_2015_2024_non_regular = merged_non_regular[merged_non_regular['データ年度'] >= 2015]
+    top20_non_regular = merged_2015_2024_non_regular.nlargest(20, '当初予算(合計)')
+
+    print("| 順位 | 年度 | 予算額（百万円） | 事業名 | 府省庁 |")
+    print("|------|------|------------------|--------|--------|")
+    for rank, (idx, row) in enumerate(top20_non_regular.iterrows(), 1):
+        budget_str = f"{row['当初予算(合計)']:,.1f}"
+        project_name = row['事業名'][:45] + ('...' if len(row['事業名']) > 45 else '')
+        print(f"| {rank} | {row['データ年度']} | {budget_str} | {project_name} | {row['府省庁']} |")
+
+    # 定番事業を除いた年度別TOP 10
+    print("\n### 定番大型事業を除いた年度別TOP 10\n")
+    for year in range(2014, 2025):
+        year_data_non_regular = merged_non_regular[merged_non_regular['データ年度'] == year].nlargest(10, '当初予算(合計)')
+        if len(year_data_non_regular) > 0:
+            print(f"#### {year}年度\n")
+            print("| 順位 | 予算額（百万円） | 事業名 | 府省庁 |")
+            print("|------|------------------|--------|--------|")
+            for rank, (idx, row) in enumerate(year_data_non_regular.iterrows(), 1):
+                budget_str = f"{row['当初予算(合計)']:,.1f}"
+                project_name = row['事業名'][:55] + ('...' if len(row['事業名']) > 55 else '')
+                print(f"| {rank} | {budget_str} | {project_name} | {row['府省庁']} |")
+            print()
+
 
 def analyze_continuous_projects():
     """すべての年度に存在する事業名を分析"""
@@ -440,25 +595,42 @@ def analyze_covid_impact():
 
 def main():
     """メイン処理"""
+    # 出力ファイルのパス
+    output_file = project_root / "data_quality" / "historical_data_analysis_report.md"
+
     try:
-        # ヘッダー
-        print("# 2014-2024年度 行政事業レビューデータ 横断分析レポート\n")
-        print(f"**生成日時**: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-        print(f"**対象年度**: 2014-2023年度（過去データ） + 2024年度（RSシステムデータ）\n")
-        print("---\n")
+        # ファイルを開いて標準出力をリダイレクト
+        with open(output_file, 'w', encoding='utf-8') as f:
+            # 標準出力を一時的にファイルにリダイレクト
+            original_stdout = sys.stdout
+            sys.stdout = f
 
-        # 1. 最大予算事業
-        analyze_largest_budget_projects()
+            try:
+                # ヘッダー
+                print("# 2014-2024年度 行政事業レビューデータ 横断分析レポート\n")
+                print(f"**生成日時**: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                print(f"**対象年度**: 2014-2023年度（過去データ） + 2024年度（RSシステムデータ）\n")
+                print("---\n")
 
-        # 2. 継続事業
-        analyze_continuous_projects()
+                # 1. 最大予算事業
+                analyze_largest_budget_projects()
 
-        # 3. コロナ影響
-        analyze_covid_impact()
+                # 2. 継続事業
+                analyze_continuous_projects()
 
-        print("\n---\n")
-        print("## 分析完了\n")
-        print("このレポートは `data_quality/analyze_historical_data.py` により自動生成されました。")
+                # 3. コロナ影響
+                analyze_covid_impact()
+
+                print("\n---\n")
+                print("## 分析完了\n")
+                print("このレポートは `data_quality/analyze_historical_data.py` により自動生成されました。")
+
+            finally:
+                # 標準出力を元に戻す
+                sys.stdout = original_stdout
+
+        # 成功メッセージを表示
+        print(f"レポートを生成しました: {output_file}")
 
     except Exception as e:
         print(f"エラー: {e}", file=sys.stderr)
