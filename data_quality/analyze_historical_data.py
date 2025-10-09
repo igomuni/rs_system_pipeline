@@ -165,6 +165,7 @@ def analyze_continuous_projects():
     print("# 2. すべての年度に存在する事業名\n")
 
     overview = load_all_overview_data()
+    budget = load_all_budget_data()
 
     # 事業名ごとに存在する年度数をカウント
     project_years = overview.groupby('事業名')['年度'].agg(['count', 'min', 'max', list]).reset_index()
@@ -223,7 +224,19 @@ def analyze_continuous_projects():
         # 年代ごとのTOP 10を表示（1920年代から）
         decades = sorted(continuous_with_start_valid['年代'].unique())
 
-        print("\n## 開始年度を10年代ごとに分類（TOP 10）\n")
+        print("\n## 開始年度を10年代ごとに分類（TOP 10と予算推移）\n")
+
+        # 全年度の予算データを取得
+        # 各事業の年度別予算を取得（予算年度 == データ年度）
+        budget_by_year = budget[budget['予算年度'] == budget['データ年度']].copy()
+
+        # 事業名と年度で予算を集計（予算事業IDは年度によって変わるため）
+        budget_pivot = budget_by_year.groupby(['事業名', 'データ年度']).agg({
+            '当初予算(合計)': 'sum'
+        }).reset_index()
+
+        # ピボットテーブルに変換（事業名 × 年度）
+        budget_wide = budget_pivot.pivot(index='事業名', columns='データ年度', values='当初予算(合計)')
 
         for decade in decades:
             if decade < 1920:  # 1920年代より前は表示しない
@@ -235,15 +248,122 @@ def analyze_continuous_projects():
 
             if len(decade_projects) > 0:
                 decade_label = f"{decade}年代"
+
+                # 予算データをマージ
+                decade_projects_with_budget = decade_projects.merge(
+                    budget_wide,
+                    left_on='事業名',
+                    right_index=True,
+                    how='left'
+                )
+
                 print(f"### {decade_label}\n")
-                print("| 順位 | 事業名 | 事業開始年度 | 府省庁 | データ存在期間 |")
-                print("|------|--------|--------------|--------|----------------|")
-                for rank, (_, row) in enumerate(decade_projects.iterrows(), 1):
-                    project_name = row['事業名'][:45] + ('...' if len(row['事業名']) > 45 else '')
+
+                # ヘッダー行を動的に生成（事業名、開始年度、府省庁 + 2014-2024年度）
+                header = "| 順位 | 事業名 | 開始年度 | 府省庁 |"
+                separator = "|------|--------|----------|--------|"
+                for year in range(2014, 2025):
+                    header += f" {year} |"
+                    separator += "------|"
+
+                print(header)
+                print(separator)
+
+                for rank, (_, row) in enumerate(decade_projects_with_budget.iterrows(), 1):
+                    project_name = row['事業名'][:30] + ('...' if len(row['事業名']) > 30 else '')
                     start_year = int(row['事業開始年度'])
-                    data_period = f"{int(row['データ開始年度'])}-{int(row['データ終了年度'])}"
-                    print(f"| {rank} | {project_name} | {start_year} | {row['府省庁']} | {data_period} |")
+                    line = f"| {rank} | {project_name} | {start_year} | {row['府省庁']} |"
+
+                    # 各年度の予算を追加
+                    for year in range(2014, 2025):
+                        if year in budget_wide.columns:
+                            budget_val = row.get(year)
+                            if pd.notna(budget_val):
+                                # 1000以上は千円単位、1000未満は小数点1桁
+                                if budget_val >= 1000:
+                                    budget_str = f"{budget_val:,.0f}"
+                                else:
+                                    budget_str = f"{budget_val:.1f}"
+                            else:
+                                budget_str = "-"
+                        else:
+                            budget_str = "-"
+                        line += f" {budget_str} |"
+
+                    print(line)
+
+                # この年代の予算統計を追加（2024年度基準）
+                decade_budget_2024 = decade_projects_with_budget[2024].dropna()
+                if len(decade_budget_2024) > 0:
+                    stats = {
+                        '事業数': len(decade_budget_2024),
+                        '平均予算': decade_budget_2024.mean(),
+                        '中央値': decade_budget_2024.median(),
+                        '標準偏差': decade_budget_2024.std(),
+                        '最小予算': decade_budget_2024.min(),
+                        '最大予算': decade_budget_2024.max()
+                    }
+
+                    print(f"\n**{decade_label}全体の統計（{stats['事業数']}件、2024年度予算・百万円）**:")
+                    print(f"- 平均: {stats['平均予算']:,.1f}、中央値: {stats['中央値']:,.1f}、標準偏差: {stats['標準偏差']:,.1f}")
+                    print(f"- 最小: {stats['最小予算']:,.1f}、最大: {stats['最大予算']:,.1f}")
+
                 print()
+
+        # 年代ごとの予算統計を追加
+        analyze_decade_budget_statistics(continuous_with_start_valid, budget)
+
+
+def analyze_decade_budget_statistics(continuous_with_start_valid, budget):
+    """年代ごとの予算統計を分析"""
+    print("\n## 開始年度別・年代ごとの予算統計（2024年度）\n")
+
+    # 2024年度の予算データを取得
+    budget_2024 = budget[(budget['データ年度'] == 2024) & (budget['予算年度'] == 2024)]
+
+    # 事業名をキーにしてマージ（予算事業IDは年度によって変わるため）
+    # まず、continuous_with_start_validから事業名と年代を取得
+    decade_mapping = continuous_with_start_valid[['事業名', '年代']].drop_duplicates()
+
+    # budget_2024と事業名でマージ
+    budget_with_decade = budget_2024.merge(
+        decade_mapping,
+        on='事業名',
+        how='inner'
+    )
+
+    if len(budget_with_decade) > 0:
+        # 年代ごとの統計を計算
+        decade_stats = budget_with_decade.groupby('年代').agg({
+            '当初予算(合計)': ['count', 'mean', 'std', 'min', 'max']
+        }).reset_index()
+
+        decade_stats.columns = ['年代', '事業数', '平均予算', '標準偏差', '最小予算', '最大予算']
+
+        # 1920年代以降のみ表示
+        decade_stats = decade_stats[decade_stats['年代'] >= 1920].sort_values('年代')
+
+        print("**注**: 2024年度の当初予算額（百万円）に基づく統計\n")
+        print("| 年代 | 事業数 | 平均予算（百万円） | 標準偏差 | 最小予算 | 最大予算 |")
+        print("|------|--------|-------------------|----------|----------|----------|")
+        for _, row in decade_stats.iterrows():
+            decade_label = f"{int(row['年代'])}年代"
+            count = int(row['事業数'])
+            mean = row['平均予算']
+            std = row['標準偏差']
+            min_val = row['最小予算']
+            max_val = row['最大予算']
+
+            print(f"| {decade_label} | {count} | {mean:,.1f} | {std:,.1f} | {min_val:,.1f} | {max_val:,.1f} |")
+
+        print()
+        print("**統計の解釈**:")
+        print("- **平均予算**: 各年代に開始された事業の2024年度予算の平均値")
+        print("- **標準偏差**: 予算のばらつき（大きいほど予算規模に差がある）")
+        print("- **最小/最大予算**: その年代で最も予算が少ない/多い事業の金額")
+        print()
+    else:
+        print("**注**: 2024年度予算データとのマッチングができませんでした\n")
 
 
 def analyze_covid_impact():
