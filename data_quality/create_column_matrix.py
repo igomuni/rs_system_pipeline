@@ -242,7 +242,7 @@ def main():
     report = create_matrix_report(rs2024_data, years)
 
     # 出力
-    output_file = project_root / "data_quality" / "column_matrix_report.md"
+    output_file = project_root / "data_quality" / "reports" / "column_matrix_report.md"
     with open(output_file, "w", encoding="utf-8") as f:
         f.write(report)
 

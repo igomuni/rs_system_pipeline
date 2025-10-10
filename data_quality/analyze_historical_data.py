@@ -596,7 +596,7 @@ def analyze_covid_impact():
 def main():
     """メイン処理"""
     # 出力ファイルのパス
-    output_file = project_root / "data_quality" / "historical_data_analysis_report.md"
+    output_file = project_root / "data_quality" / "reports" / "historical_data_analysis_report.md"
 
     try:
         # ファイルを開いて標準出力をリダイレクト

@@ -190,7 +190,7 @@ def analyze_column_details(categories):
 
 def generate_report(gap_summary, column_diffs):
     """レポート生成"""
-    report_path = PROJECT_ROOT / "data_quality" / "rs_conversion_gap_2023.md"
+    report_path = PROJECT_ROOT / "data_quality" / "reports" / "rs_conversion_gap_2023.md"
 
     with open(report_path, 'w', encoding='utf-8') as f:
         f.write("# 2023年データのRSシステム形式変換ギャップ分析\n\n")

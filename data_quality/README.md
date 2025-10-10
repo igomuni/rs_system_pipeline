@@ -6,15 +6,36 @@
 
 ```
 data_quality/
-├── README.md                      # このファイル
-├── generate_quality_report.py    # 年度別品質レポート生成（メインツール）
-├── check_totals.py               # 年度別予算・執行額の簡易チェック
-├── summary_report.py             # 予算・執行額サマリーレポート
-├── expenditure_summary.py        # 支出先データサマリーレポート
-└── reports/                      # 生成されたレポート保存先
-    ├── quality_report_2014.md
+├── README.md                              # このファイル
+│
+├── 【品質レポート生成】
+├── generate_quality_report.py            # 年度別品質レポート生成（メインツール）
+├── create_column_matrix.py               # RS2024と過去データの列名対応マトリクス
+├── analyze_historical_data.py            # 過去データ構造分析
+├── analyze_mapping_opportunities.py      # 列名マッピング改善機会分析
+├── analyze_rs_conversion_gap.py          # RSシステム形式変換ギャップ分析
+├── validate_budget_continuity.py         # 予算執行データ継続性検証
+│
+├── 【データ分析ツール】
+├── analyze_pension_project.py            # 年金事業の詳細分析
+├── analyze_olympic_projects.py           # オリンピック関連事業分析
+│
+├── 【サマリーツール】
+├── check_totals.py                       # 年度別予算・執行額の簡易チェック
+├── summary_report.py                     # 予算・執行額サマリーレポート
+├── expenditure_summary.py                # 支出先データサマリーレポート
+│
+└── reports/                              # 生成されたレポート保存先
+    ├── DATA_QUALITY_REPORT.md            # 全年度統合品質レポート
+    ├── quality_report_2014.md            # 年度別詳細レポート
     ├── quality_report_2015.md
-    └── ...
+    ├── ...
+    ├── column_matrix_report.md           # 列名対応マトリクス
+    ├── historical_data_analysis_report.md # 過去データ構造分析
+    ├── mapping_opportunities.md          # マッピング改善機会
+    ├── rs_conversion_gap_2023.md         # RSシステム変換ギャップ
+    ├── budget_continuity_validation.md   # 予算継続性検証
+    └── pension_project_analysis.md       # 年金事業分析
 ```
 
 ## 使用方法
@@ -28,7 +49,7 @@ python data_quality/generate_quality_report.py
 ```
 
 **出力**:
-- `data_quality/DATA_QUALITY_REPORT.md`: **全年度統合レポート**
+- `data_quality/reports/DATA_QUALITY_REPORT.md`: **全年度統合レポート**
   - 年度別基本統計一覧
   - 予算・執行データ一覧
   - 支出先データ一覧
@@ -46,9 +67,95 @@ python data_quality/generate_quality_report.py
 - ✅ 支出額合計の異常値検出（50兆円以上）
 - ✅ 平均支出額の異常値検出（100億円以上）
 
-### 2. 予算・執行額サマリー
+### 2. 列名対応マトリクス生成
 
-10年分の予算・執行額を一覧表示します。
+RS2024と過去データ（2014-2023）の列名対応状況をマトリクス形式で分析します。
+
+```bash
+python data_quality/create_column_matrix.py
+```
+
+**出力**: `data_quality/reports/column_matrix_report.md`
+- テーブル別の列名存在マトリクス
+- 年度別対応率
+- 列名正規化とマッピングルール適用済み
+
+### 3. 過去データ構造分析
+
+全年度のファイル構造と列名パターンを分析します。
+
+```bash
+python data_quality/analyze_historical_data.py
+```
+
+**出力**: `data_quality/reports/historical_data_analysis_report.md`
+- 年度別ファイル構成
+- テーブル別列名の変遷
+- 列数推移グラフ（Markdown表形式）
+
+### 4. マッピング改善機会分析
+
+列名変換マップで改善可能な箇所を自動検出します。
+
+```bash
+python data_quality/analyze_mapping_opportunities.py
+```
+
+**出力**: `data_quality/reports/mapping_opportunities.md`
+- 対応率が低いテーブルの列名差分
+- RS2024と過去データの類似列名候補（自動検出）
+- 推奨度付きマッピング候補リスト
+
+### 5. RSシステム変換ギャップ分析
+
+2023年データをRS2024形式に変換する際のギャップを分析します。
+
+```bash
+python data_quality/analyze_rs_conversion_gap.py
+```
+
+**出力**: `data_quality/reports/rs_conversion_gap_2023.md`
+- 新規作成が必要なファイル一覧
+- 既存ファイルのカラム差分
+- フェーズ別実装方針
+
+### 6. 予算執行データ継続性検証
+
+2019-2024年の予算データについて、年度間の継続性を検証します。
+
+```bash
+python data_quality/validate_budget_continuity.py
+```
+
+**出力**: `data_quality/reports/budget_continuity_validation.md`
+- 年度間の事業継続率
+- 全年度継続事業リスト
+- 予算変遷追跡の妥当性
+- データ異常値検出
+
+### 7. 特定事業の詳細分析
+
+#### 年金事業分析
+
+基礎年金給付事業の10年間の予算・執行・支出データを詳細分析します。
+
+```bash
+python data_quality/analyze_pension_project.py
+```
+
+**出力**: `data_quality/reports/pension_project_analysis.md`
+
+#### オリンピック関連事業分析
+
+オリンピック・パラリンピック関連事業を抽出し、予算推移を分析します（標準出力）。
+
+```bash
+python data_quality/analyze_olympic_projects.py
+```
+
+### 8. 予算・執行額サマリー
+
+10年分の予算・執行額を一覧表示します（標準出力）。
 
 ```bash
 python data_quality/summary_report.py
@@ -63,9 +170,9 @@ python data_quality/summary_report.py
 ...
 ```
 
-### 3. 支出先データサマリー
+### 9. 支出先データサマリー
 
-10年分の支出先データを一覧表示します。
+10年分の支出先データを一覧表示します（標準出力）。
 
 ```bash
 python data_quality/expenditure_summary.py
@@ -80,9 +187,9 @@ python data_quality/expenditure_summary.py
 ...
 ```
 
-### 4. 簡易チェック
+### 10. 簡易チェック
 
-年度別の予算総額と執行額を簡易表示します（デバッグ用）。
+年度別の予算総額と執行額を簡易表示します（デバッグ用、標準出力）。
 
 ```bash
 python data_quality/check_totals.py
@@ -152,6 +259,25 @@ if report['budget']['執行率(%)'] > 200:
 
 `save_year_report_md()`関数を編集してMarkdown出力をカスタマイズできます。
 
+### 新しい分析ツールの追加
+
+1. `data_quality/` 直下に Python スクリプトを作成
+2. レポート出力先は `data_quality/reports/` 配下に設定
+3. このREADME.mdにツールの説明を追加
+
+```python
+# レポート出力例
+from pathlib import Path
+
+project_root = Path(__file__).parent.parent
+report_dir = project_root / "data_quality" / "reports"
+output_file = report_dir / "my_analysis_report.md"
+
+with open(output_file, "w", encoding="utf-8") as f:
+    f.write("# My Analysis Report\n\n")
+    # レポート内容を書き込み
+```
+
 ## 注意事項
 
 - レポート生成には`output/processed/`に処理済みデータが必要です
@@ -164,12 +290,13 @@ if report['budget']['執行率(%)'] > 200:
 
 ## 関連ドキュメント
 
-- [DATA_QUALITY_REPORT.md](DATA_QUALITY_REPORT.md): 全年度統合品質レポート（自動生成）
-- [CHANGELOG.md](../CHANGELOG.md): 修正履歴
+- [reports/DATA_QUALITY_REPORT.md](reports/DATA_QUALITY_REPORT.md): 全年度統合品質レポート（自動生成）
+- [../CHANGELOG.md](../CHANGELOG.md): 修正履歴
+- [../CLAUDE.md](../CLAUDE.md): プロジェクト全体のガイド
 
 ## レポート例
 
-### 統合レポート（DATA_QUALITY_REPORT.md）
+### 統合レポート（reports/DATA_QUALITY_REPORT.md）
 
 全年度のデータを一覧化した統合レポートです：
 

@@ -368,7 +368,7 @@ def check_data_anomalies(analysis_result):
 
 def generate_report(analysis_result, budget_issues, data_issues):
     """検証結果をレポートファイルに出力"""
-    report_path = PROJECT_ROOT / 'data_quality' / 'budget_continuity_validation.md'
+    report_path = PROJECT_ROOT / 'data_quality' / 'reports' / 'budget_continuity_validation.md'
 
     with open(report_path, 'w', encoding='utf-8') as f:
         f.write("# 予算執行データ継続性検証レポート\n\n")

@@ -267,7 +267,7 @@ def main():
 
     report = generate_report()
 
-    output_file = project_root / "data_quality" / "mapping_opportunities.md"
+    output_file = project_root / "data_quality" / "reports" / "mapping_opportunities.md"
     with open(output_file, "w", encoding="utf-8") as f:
         f.write(report)
 

@@ -59,9 +59,8 @@ output/
 *.csv
 *.json
 
-# Quality reports (統合レポートは含める、年度別は除外)
-!data_quality/DATA_QUALITY_REPORT.md
-data_quality/reports/*.md
+# Quality reports
+# (data_quality/reports/ 配下のレポートは全て管理対象に含める)
 
 # Intermediate data
 data/raw/

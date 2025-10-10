@@ -201,7 +201,7 @@ def generate_year_report(year):
 
 def generate_consolidated_report(all_reports, summary_data):
     """全年度の統合レポートを生成"""
-    output_file = Path("data_quality") / "DATA_QUALITY_REPORT.md"
+    output_file = REPORT_DIR / "DATA_QUALITY_REPORT.md"
 
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write("# データ品質レポート（統合版）\n\n")
