@@ -522,10 +522,10 @@ def analyze_decade_budget_statistics(continuous_with_start_valid, budget):
 
 
 def analyze_covid_impact():
-    """コロナ前後で影響を受けている事業を分析（2019-2022年の推移）"""
+    """コロナ前後で影響を受けている事業を分析（2019-2024年の推移）"""
     print("\n---\n")
     print("# 3. コロナ前後で影響を受けている事業\n")
-    print("**注**: コロナ禍の影響を測るため、2019、2020、2021、2022年度の4年間の予算推移を分析します。\n")
+    print("**注**: コロナ禍の影響を測るため、2019、2020、2021、2022、2023、2024年度の6年間の予算推移を分析します。\n")
 
     overview = load_all_overview_data()
     budget = load_all_budget_data()
@@ -536,80 +536,113 @@ def analyze_covid_impact():
         '当初予算(合計)': 'sum'
     }).reset_index()
 
-    # 2019-2022年の4年間のデータをピボット
-    budget_pivot = budget_by_name[budget_by_name['データ年度'].isin([2019, 2020, 2021, 2022])].pivot(
+    # 2019-2024年の6年間のデータをピボット
+    budget_pivot = budget_by_name[budget_by_name['データ年度'].isin([2019, 2020, 2021, 2022, 2023, 2024])].pivot(
         index='事業名',
         columns='データ年度',
         values='当初予算(合計)'
     ).reset_index()
 
     # 列名を変更
-    budget_pivot.columns = ['事業名', '予算2019', '予算2020', '予算2021', '予算2022']
+    budget_pivot.columns = ['事業名', '予算2019', '予算2020', '予算2021', '予算2022', '予算2023', '予算2024']
 
-    # 4年間すべてのデータがある事業のみ抽出
-    budget_pivot = budget_pivot.dropna(subset=['予算2019', '予算2020', '予算2021', '予算2022'])
+    # 6年間すべてのデータがある事業のみ抽出
+    budget_pivot = budget_pivot.dropna(subset=['予算2019', '予算2020', '予算2021', '予算2022', '予算2023', '予算2024'])
 
-    # 増減額・増減率を計算（2019→2022）
-    budget_pivot['増減額'] = budget_pivot['予算2022'] - budget_pivot['予算2019']
+    # 増減額・増減率を計算（2019→2024）
+    budget_pivot['増減額'] = budget_pivot['予算2024'] - budget_pivot['予算2019']
     budget_pivot['増減率'] = (budget_pivot['増減額'] / budget_pivot['予算2019'] * 100).round(1)
 
-    # 府省庁情報を追加（2022年度のデータから取得）
-    overview_2022 = overview[overview['年度'] == 2022][['事業名', '府省庁']].drop_duplicates(subset=['事業名'])
-    budget_pivot = budget_pivot.merge(overview_2022, on='事業名', how='left')
+    # 府省庁情報を追加（2024年度のデータから取得）
+    overview_2024 = overview[overview['年度'] == 2024][['事業名', '府省庁']].drop_duplicates(subset=['事業名'])
+    budget_pivot = budget_pivot.merge(overview_2024, on='事業名', how='left')
+
+    # 2019年を基準に各年度との増減額・増減率を計算
+    for year in [2020, 2021, 2022, 2023, 2024]:
+        budget_pivot[f'増減額_{year}'] = budget_pivot[f'予算{year}'] - budget_pivot['予算2019']
+        budget_pivot[f'増減率_{year}'] = (budget_pivot[f'増減額_{year}'] / budget_pivot['予算2019'] * 100).round(1)
+
+    # 各年度で最大の増減額・増減率を記録
+    budget_pivot['最大増減額'] = budget_pivot[['増減額_2020', '増減額_2021', '増減額_2022', '増減額_2023', '増減額_2024']].max(axis=1)
+    budget_pivot['最小増減額'] = budget_pivot[['増減額_2020', '増減額_2021', '増減額_2022', '増減額_2023', '増減額_2024']].min(axis=1)
+    budget_pivot['最大増減率'] = budget_pivot[['増減率_2020', '増減率_2021', '増減率_2022', '増減率_2023', '増減率_2024']].max(axis=1)
+    budget_pivot['最小増減率'] = budget_pivot[['増減率_2020', '増減率_2021', '増減率_2022', '増減率_2023', '増減率_2024']].min(axis=1)
+
+    # ピーク年度を特定
+    increase_cols = ['増減額_2020', '増減額_2021', '増減額_2022', '増減額_2023', '増減額_2024']
+    budget_pivot['ピーク年度'] = budget_pivot[increase_cols].idxmax(axis=1).str.replace('増減額_', '').astype(int)
+    budget_pivot['ピーク増減額'] = budget_pivot[increase_cols].max(axis=1)
 
     # 統計サマリ
-    print("## 全体統計（2019年度→2022年度）\n")
+    print("## 全体統計（2019年度→2024年度）\n")
     print("| 項目 | 件数・値 |")
     print("|------|---------|")
-    print(f"| 4年間継続事業数 | {len(budget_pivot)}件 |")
-    print(f"| 増加事業数 | {len(budget_pivot[budget_pivot['増減額'] > 0])}件 |")
-    print(f"| 減少事業数 | {len(budget_pivot[budget_pivot['増減額'] < 0])}件 |")
-    print(f"| 変化なし | {len(budget_pivot[budget_pivot['増減額'] == 0])}件 |")
-    print(f"| 平均増減率 | {budget_pivot['増減率'].replace([float('inf'), float('-inf')], 0).mean():.1f}% |")
-    print(f"| 中央値増減率 | {budget_pivot['増減率'].median():.1f}% |")
+    print(f"| 6年間継続事業数 | {len(budget_pivot)}件 |")
+    print(f"| 2019→2024増加事業数 | {len(budget_pivot[budget_pivot['増減額_2024'] > 0])}件 |")
+    print(f"| 2019→2024減少事業数 | {len(budget_pivot[budget_pivot['増減額_2024'] < 0])}件 |")
+    print(f"| 2019→2024変化なし | {len(budget_pivot[budget_pivot['増減額_2024'] == 0])}件 |")
+    print(f"| 平均増減率（2024時点） | {budget_pivot['増減率_2024'].replace([float('inf'), float('-inf')], 0).mean():.1f}% |")
+    print(f"| 中央値増減率（2024時点） | {budget_pivot['増減率_2024'].median():.1f}% |")
 
-    # 大幅増加した事業（増加率 > 100% かつ 増加額 > 1000百万円）
-    print("\n## 大幅増加した事業（増加率100%以上 & 増加額1,000百万円以上）\n")
-    print("**コロナ対策・経済支援事業が上位に入ります。4年間の推移を見ることで、コロナ禍の影響の流れが分かります。**\n")
+    # 大幅増加した事業（いずれかの年度で増加率 > 100% かつ 増加額 > 10,000百万円）
+    print("\n## 大幅増加した事業（2019年比でいずれかの年度が増加率100%以上 & 増加額10,000百万円（100億円）以上）\n")
+    print("**注**: 2019年を基準に、2020-2024年のいずれかの年度で条件を満たした事業を表示します。\n")
+    print("**ピーク年度**: 2019年比で最も増加額が大きかった年度を表示しています。\n")
+    print("**ソート順**: 最大増減率の降順で表示（コロナ禍の影響を率として捉えるため）\n")
+
     increased = budget_pivot[
-        (budget_pivot['増減率'] > 100) & (budget_pivot['増減額'] > 1000)
-    ].sort_values('増減額', ascending=False).head(30)
+        (budget_pivot['最大増減率'] > 100) & (budget_pivot['最大増減額'] > 10000)
+    ].sort_values('最大増減率', ascending=False).head(30)
 
-    print("| 順位 | 事業名 | 府省庁 | 2019 | 2020 | 2021 | 2022 | 増減額 | 増減率 |")
-    print("|------|--------|--------|------|------|------|------|--------|--------|")
+    print("| 順位 | 事業名 | 府省庁 | 2019 | 2020 | 2021 | 2022 | 2023 | 2024 | ピーク年度 | 最大増減率 | 最大増減額 |")
+    print("|------|--------|--------|------|------|------|------|------|------|-----------|-----------|-----------|")
     for rank, (idx, row) in enumerate(increased.iterrows(), 1):
-        project_name = row['事業名'][:40] + ('...' if len(row['事業名']) > 40 else '')
+        project_name = row['事業名'][:30] + ('...' if len(row['事業名']) > 30 else '')
         ministry = row['府省庁'] if pd.notna(row['府省庁']) else '-'
-        print(f"| {rank} | {project_name} | {ministry} | {row['予算2019']:,.0f} | {row['予算2020']:,.0f} | {row['予算2021']:,.0f} | {row['予算2022']:,.0f} | +{row['増減額']:,.0f} | +{row['増減率']:.1f}% |")
+        peak_year = int(row['ピーク年度'])
+        print(f"| {rank} | {project_name} | {ministry} | {row['予算2019']:,.0f} | {row['予算2020']:,.0f} | {row['予算2021']:,.0f} | {row['予算2022']:,.0f} | {row['予算2023']:,.0f} | {row['予算2024']:,.0f} | {peak_year} | +{row['最大増減率']:.1f}% | +{row['最大増減額']:,.0f} |")
 
-    # 大幅減少した事業（減少率 > 50% かつ 減少額 > 100百万円）
-    print("\n## 大幅減少した事業（減少率50%以上 & 減少額100百万円以上）\n")
+    # 大幅減少した事業（いずれかの年度で減少率 > 50% かつ 減少額 > 10,000百万円）
+    print("\n## 大幅減少した事業（2019年比でいずれかの年度が減少率50%以上 & 減少額10,000百万円（100億円）以上）\n")
+    print("**注**: 2019年を基準に、2020-2024年のいずれかの年度で条件を満たした事業を表示します。\n")
+    print("**ボトム年度**: 2019年比で最も減少額が大きかった年度を表示しています。\n")
+    print("**ソート順**: 最小増減率の昇順で表示（減少率が大きい順）\n")
+
     decreased = budget_pivot[
-        (budget_pivot['増減率'] < -50) & (budget_pivot['増減額'] < -100)
-    ].sort_values('増減額').head(20)
+        (budget_pivot['最小増減率'] < -50) & (budget_pivot['最小増減額'] < -10000)
+    ].sort_values('最小増減率').head(20)
 
-    print("| 順位 | 事業名 | 府省庁 | 2019 | 2020 | 2021 | 2022 | 増減額 | 増減率 |")
-    print("|------|--------|--------|------|------|------|------|--------|--------|")
+    # ボトム年度を特定（最も減少した年度）
+    decrease_cols = ['増減額_2020', '増減額_2021', '増減額_2022', '増減額_2023', '増減額_2024']
+    decreased = decreased.copy()
+    decreased['ボトム年度'] = decreased[decrease_cols].idxmin(axis=1).str.replace('増減額_', '').astype(int)
+    decreased['ボトム増減額'] = decreased[decrease_cols].min(axis=1)
+
+    print("| 順位 | 事業名 | 府省庁 | 2019 | 2020 | 2021 | 2022 | 2023 | 2024 | ボトム年度 | 最小増減率 | 最大減少額 |")
+    print("|------|--------|--------|------|------|------|------|------|------|-----------|-----------|-----------|")
     for rank, (idx, row) in enumerate(decreased.iterrows(), 1):
-        project_name = row['事業名'][:40] + ('...' if len(row['事業名']) > 40 else '')
+        project_name = row['事業名'][:30] + ('...' if len(row['事業名']) > 30 else '')
         ministry = row['府省庁'] if pd.notna(row['府省庁']) else '-'
-        print(f"| {rank} | {project_name} | {ministry} | {row['予算2019']:,.0f} | {row['予算2020']:,.0f} | {row['予算2021']:,.0f} | {row['予算2022']:,.0f} | {row['増減額']:,.0f} | {row['増減率']:.1f}% |")
+        bottom_year = int(row['ボトム年度'])
+        print(f"| {rank} | {project_name} | {ministry} | {row['予算2019']:,.0f} | {row['予算2020']:,.0f} | {row['予算2021']:,.0f} | {row['予算2022']:,.0f} | {row['予算2023']:,.0f} | {row['予算2024']:,.0f} | {bottom_year} | {row['最小増減率']:.1f}% | {row['ボトム増減額']:,.0f} |")
 
     # 雇用調整助成金の検索
-    print("\n## 雇用調整助成金の推移（2019-2022年）\n")
+    print("\n## 雇用調整助成金の推移（2019-2024年）\n")
+    print("**注**: この事業は2021年にピークを迎え、その後正常化しました。最終年度（2024年）の増減額・増減率は2019年比の値です。\n")
     employment_subsidy = budget_pivot[budget_pivot['事業名'].str.contains('雇用調整', na=False)]
     if len(employment_subsidy) > 0:
-        print("| 事業名 | 府省庁 | 2019 | 2020 | 2021 | 2022 | 増減額 | 増減率 |")
-        print("|--------|--------|------|------|------|------|--------|--------|")
-        for idx, row in employment_subsidy.iterrows():
-            project_name = row['事業名'][:50] + ('...' if len(row['事業名']) > 50 else '')
+        print("| 事業名 | 府省庁 | 2019 | 2020 | 2021 | 2022 | 2023 | 2024 | ピーク年度 | 最大増減率 | 最大増減額 | 2024増減額 | 2024増減率 |")
+        print("|--------|--------|------|------|------|------|------|------|-----------|-----------|-----------|-----------|-----------|")
+        for _, row in employment_subsidy.iterrows():
+            project_name = row['事業名'][:35] + ('...' if len(row['事業名']) > 35 else '')
             ministry = row['府省庁'] if pd.notna(row['府省庁']) else '-'
-            print(f"| {project_name} | {ministry} | {row['予算2019']:,.0f} | {row['予算2020']:,.0f} | {row['予算2021']:,.0f} | {row['予算2022']:,.0f} | {row['増減額']:+,.0f} | {row['増減率']:+.1f}% |")
+            peak_year = int(row['ピーク年度'])
+            print(f"| {project_name} | {ministry} | {row['予算2019']:,.0f} | {row['予算2020']:,.0f} | {row['予算2021']:,.0f} | {row['予算2022']:,.0f} | {row['予算2023']:,.0f} | {row['予算2024']:,.0f} | {peak_year} | +{row['最大増減率']:.1f}% | +{row['最大増減額']:,.0f} | {row['増減額']:+,.0f} | {row['増減率']:+.1f}% |")
     else:
-        print("**注**: 「雇用調整」を含む事業が2019-2022年の4年間継続データに見つかりませんでした。\n")
+        print("**注**: 「雇用調整」を含む事業が2019-2024年の6年間継続データに見つかりませんでした。\n")
         print("可能性:")
         print("- 事業名が年度によって異なる")
-        print("- 4年間のいずれかの年度でデータが欠損している")
+        print("- 6年間のいずれかの年度でデータが欠損している")
         print("\n")
 
 
