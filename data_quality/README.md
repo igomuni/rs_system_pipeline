@@ -25,17 +25,35 @@ data_quality/
 ├── summary_report.py                     # 予算・執行額サマリーレポート
 ├── expenditure_summary.py                # 支出先データサマリーレポート
 │
-└── reports/                              # 生成されたレポート保存先
-    ├── DATA_QUALITY_REPORT.md            # 全年度統合品質レポート
-    ├── quality_report_2014.md            # 年度別詳細レポート
-    ├── quality_report_2015.md
-    ├── ...
-    ├── column_matrix_report.md           # 列名対応マトリクス
-    ├── historical_data_analysis_report.md # 過去データ構造分析
-    ├── mapping_opportunities.md          # マッピング改善機会
-    ├── rs_conversion_gap_2023.md         # RSシステム変換ギャップ
-    ├── budget_continuity_validation.md   # 予算継続性検証
-    └── pension_project_analysis.md       # 年金事業分析
+├── reports/                              # 生成されたレポート保存先
+│   ├── DATA_QUALITY_REPORT.md            # 全年度統合品質レポート
+│   ├── quality_report_2014.md            # 年度別詳細レポート
+│   ├── quality_report_2015.md
+│   ├── ...
+│   ├── column_matrix_report.md           # 列名対応マトリクス
+│   ├── historical_data_analysis_report.md # 過去データ構造分析
+│   ├── mapping_opportunities.md          # マッピング改善機会
+│   ├── rs_conversion_gap_2023.md         # RSシステム変換ギャップ
+│   ├── budget_continuity_validation.md   # 予算継続性検証
+│   └── pension_project_analysis.md       # 年金事業分析
+│
+├── investigations/                       # 調査用スクリプト（長音修正調査等）
+│   ├── analyze_all_years_longvowel.py   # 全年度長音分析
+│   ├── check_missing_longvowel_words.py # 長音単語の欠落チェック
+│   ├── export_all_longvowel_words_csv.py # 長音単語CSV出力
+│   ├── generate_preserve_words_list.py  # 長音保持単語リスト生成
+│   ├── identify_words_to_restore_longvowel.py # 長音復元対象単語特定
+│   ├── investigate_diet_member_budget.py # 国会議員予算調査
+│   ├── investigate_hyphen_longvowel_mixture.py # ハイフン・長音混在調査
+│   ├── investigate_raw_hyphen_misuse.py # rawデータのハイフン誤用調査
+│   ├── test_neologdn_behavior.py        # neologdn動作検証
+│   ├── test_our_normalization.py        # 正規化処理検証
+│   └── verify_hyphen_to_longvowel_fix.py # ハイフン→長音修正検証
+│
+└── archives/                             # 調査で生成された中間ファイル
+    ├── all_longvowel_words_2014-2023.csv # 全長音単語リスト
+    ├── raw_hyphen_misuse_2014-2023.csv  # ハイフン誤用データ
+    └── PRESERVE_LONG_VOWEL_WORDS*.txt   # 長音保持単語候補（廃止）
 ```
 
 ## 使用方法
