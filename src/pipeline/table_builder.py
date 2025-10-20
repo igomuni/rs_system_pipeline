@@ -265,8 +265,8 @@ class TableBuilder:
         all_budget_records = []
 
         # 予算年度パターンを探す
-        # 4桁西暦、令和/平成+数字、または1-2桁年度（-NN年度-形式）
-        budget_year_pattern = re.compile(r'(\d{4})年度|令和(\d+)年度|令和元年度|平成(\d+)年度|-(\d{1,2})年度-')
+        # 4桁西暦、令和/平成+数字、または1-2桁年度（-NN年度の形式）
+        budget_year_pattern = re.compile(r'(\d{4})年度|令和(\d+)年度|令和元年度|平成(\d+)年度|-(\d{1,2})年度')
 
         # 事前に全カラムをスキャンして令和時代かどうか判定
         all_columns_str = ''.join(str(col) for col in columns)

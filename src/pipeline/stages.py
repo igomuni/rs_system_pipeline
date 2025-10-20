@@ -32,12 +32,13 @@ class PipelineStage:
         self.name = name
         self.description = description
 
-    def run(self, update_callback: Optional[Callable] = None) -> bool:
+    def run(self, update_callback: Optional[Callable] = None, target_year: Optional[int] = None) -> bool:
         """
         ステージを実行
 
         Args:
             update_callback: 進捗更新用のコールバック関数
+            target_year: 処理対象年度（指定しない場合は全年度）
 
         Returns:
             成功した場合True
@@ -54,9 +55,11 @@ class Stage01_ExtractToCSV(PipelineStage):
             description="Excel/ZIPファイルをCSVに変換"
         )
 
-    def run(self, update_callback: Optional[Callable] = None) -> bool:
+    def run(self, update_callback: Optional[Callable] = None, target_year: Optional[int] = None) -> bool:
         """Excel/ZIPファイルをCSVに変換"""
         logger.info(f"Starting {self.name}")
+        if target_year:
+            logger.info(f"Processing only year {target_year}")
 
         if not DOWNLOAD_DIR.exists():
             logger.error(f"Download directory not found: {DOWNLOAD_DIR}")
@@ -144,7 +147,7 @@ class Stage02_Normalize(PipelineStage):
             description="日本語テキストの正規化（和暦変換、記号統一等）"
         )
 
-    def run(self, update_callback: Optional[Callable] = None) -> bool:
+    def run(self, update_callback: Optional[Callable] = None, target_year: Optional[int] = None) -> bool:
         """CSVファイルのテキストを正規化"""
         logger.info(f"Starting {self.name}")
 
@@ -212,9 +215,11 @@ class Stage03_BuildTables(PipelineStage):
             description="正規化されたデータをRSシステム形式のテーブルに変換"
         )
 
-    def run(self, update_callback: Optional[Callable] = None) -> bool:
+    def run(self, update_callback: Optional[Callable] = None, target_year: Optional[int] = None) -> bool:
         """RSシステム形式のテーブルを構築"""
         logger.info(f"Starting {self.name}")
+        if target_year:
+            logger.info(f"Processing only year {target_year}")
 
         if not NORMALIZED_DIR.exists():
             logger.error(f"Normalized directory not found: {NORMALIZED_DIR}")
@@ -224,6 +229,13 @@ class Stage03_BuildTables(PipelineStage):
 
         # 年度ごとのディレクトリを処理
         year_dirs = [d for d in NORMALIZED_DIR.iterdir() if d.is_dir()]
+
+        # 年度指定がある場合はフィルター
+        if target_year:
+            year_dirs = [d for d in year_dirs if d.name == f"year_{target_year}"]
+            if not year_dirs:
+                logger.error(f"Year directory not found: year_{target_year}")
+                return False
 
         total_files = 0
         total_success = 0
@@ -257,7 +269,7 @@ class Stage04_GenerateSchema(PipelineStage):
             description="処理済みデータのスキーマ定義を生成"
         )
 
-    def run(self, update_callback: Optional[Callable] = None) -> bool:
+    def run(self, update_callback: Optional[Callable] = None, target_year: Optional[int] = None) -> bool:
         """スキーマ定義を生成"""
         logger.info(f"Starting {self.name}")
 

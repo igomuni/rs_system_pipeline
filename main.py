@@ -193,6 +193,12 @@ def cli_main():
         help="Start stage (1-4)",
     )
     parser.add_argument(
+        "--year",
+        type=int,
+        default=None,
+        help="Process only specific year (e.g., 2014). If not specified, process all years.",
+    )
+    parser.add_argument(
         "--server",
         action="store_true",
         help="Run as API server",
@@ -221,7 +227,9 @@ def cli_main():
         _ensure_directories()
 
         logger.info(f"Starting pipeline from stage {args.stage}")
-        job_id = pipeline_manager.create_job(args.stage)
+        if args.year:
+            logger.info(f"Processing only year {args.year}")
+        job_id = pipeline_manager.create_job(args.stage, target_year=args.year)
         success = pipeline_manager.run_pipeline(job_id)
 
         if success:

@@ -34,9 +34,10 @@ class JobCancelledError(Exception):
 class Job:
     """パイプラインジョブ"""
 
-    def __init__(self, job_id: str, start_stage: int = 1):
+    def __init__(self, job_id: str, start_stage: int = 1, target_year: Optional[int] = None):
         self.job_id = job_id
         self.start_stage = start_stage
+        self.target_year = target_year
         self.status = JobStatus.PENDING
         self.current_stage: Optional[int] = None
         self.progress_message = ""
@@ -52,6 +53,7 @@ class Job:
             "job_id": self.job_id,
             "status": self.status.value,
             "start_stage": self.start_stage,
+            "target_year": self.target_year,
             "current_stage": self.current_stage,
             "progress_message": self.progress_message,
             "error_message": self.error_message,
@@ -68,23 +70,24 @@ class PipelineManager:
         self.jobs: Dict[str, Job] = {}
         self.lock = threading.Lock()
 
-    def create_job(self, start_stage: int = 1) -> str:
+    def create_job(self, start_stage: int = 1, target_year: Optional[int] = None) -> str:
         """
         新しいジョブを作成
 
         Args:
             start_stage: 開始ステージ番号（1-4）
+            target_year: 処理対象年度（指定しない場合は全年度）
 
         Returns:
             ジョブID
         """
         job_id = str(uuid.uuid4())
-        job = Job(job_id, start_stage)
+        job = Job(job_id, start_stage, target_year)
 
         with self.lock:
             self.jobs[job_id] = job
 
-        logger.info(f"Created job {job_id} (start_stage={start_stage})")
+        logger.info(f"Created job {job_id} (start_stage={start_stage}, target_year={target_year or 'all'})")
         return job_id
 
     def get_job(self, job_id: str) -> Optional[Job]:
@@ -165,7 +168,7 @@ class PipelineManager:
                     with self.lock:
                         job.progress_message = message
 
-                success = stage.run(update_callback)
+                success = stage.run(update_callback, target_year=job.target_year)
 
                 if not success:
                     raise Exception(f"Stage {stage_num} failed")

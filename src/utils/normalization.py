@@ -5,6 +5,7 @@
 """
 import re
 import unicodedata
+from pathlib import Path
 from typing import Optional
 
 try:
@@ -44,13 +45,106 @@ CIRCLE_NUMBER_MAP = {
 }
 
 # ハイフン・ダッシュの統一
+# 注意: 長音記号（ー）は除外（カタカナ語で使用するため）
 HYPHEN_CHARS = [
-    '‐', '‑', '‒', '–', '—', '―', '−', 'ー',  # 各種ハイフン・ダッシュ
+    '‐', '‑', '‒', '–', '—', '―', '−',  # 各種ハイフン・ダッシュ
     '─', '━', '～', '〜',  # 罫線、波ダッシュ
 ]
 
 # カタカナの長音記号誤用パターン（例：サービスーの「ー」→「ス」）
 RE_KATAKANA_HYPHEN = re.compile(r'([ァ-ヴ])ー(?=[^ァ-ヴー]|$)')
+
+# ハイフン→長音の修正辞書（遅延読み込み）
+_HYPHEN_TO_LONGVOWEL_MAP = None
+
+
+def load_hyphen_to_longvowel_map():
+    """
+    ハイフン→長音の修正辞書を読み込み
+
+    hyphen_to_longvowel_words.txt から読み込んで辞書を作成
+    フォーマット: 長音版（正）<TAB>ハイフン版（誤）<TAB>コメント
+
+    Returns:
+        dict: {ハイフン版: 長音版} の辞書
+    """
+    global _HYPHEN_TO_LONGVOWEL_MAP
+
+    if _HYPHEN_TO_LONGVOWEL_MAP is not None:
+        return _HYPHEN_TO_LONGVOWEL_MAP
+
+    mapping = {}
+
+    # ファイルパスの取得
+    current_file = Path(__file__)
+    dict_file = current_file.parent / 'hyphen_to_longvowel_words.txt'
+
+    if not dict_file.exists():
+        # ファイルが見つからない場合は空の辞書を返す
+        _HYPHEN_TO_LONGVOWEL_MAP = mapping
+        return mapping
+
+    try:
+        with open(dict_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+
+                # コメント行や空行をスキップ
+                if not line or line.startswith('#'):
+                    continue
+
+                # タブ区切りでパース
+                parts = line.split('\t')
+                if len(parts) >= 2:
+                    long_version = parts[0].strip()
+                    hyphen_version = parts[1].strip()
+
+                    if long_version and hyphen_version:
+                        mapping[hyphen_version] = long_version
+
+    except Exception as e:
+        print(f"Warning: Failed to load hyphen_to_longvowel_words.txt: {e}")
+
+    _HYPHEN_TO_LONGVOWEL_MAP = mapping
+    return mapping
+
+
+def fix_hyphen_to_longvowel(text: str) -> str:
+    """
+    rawデータの入力ミスを修正: ハイフン（-）を長音（ー）に変換
+
+    例:
+        「コミュニケ-ション」→「コミュニケーション」
+        「エネルギ-」→「エネルギー」
+
+    注意: この処理は normalize_hyphens() の前に実行する必要がある
+
+    Args:
+        text: 変換対象のテキスト
+
+    Returns:
+        変換後のテキスト
+    """
+    if not isinstance(text, str):
+        return text
+
+    # ハイフンを含まない場合はスキップ
+    if '-' not in text:
+        return text
+
+    # 辞書を読み込み
+    mapping = load_hyphen_to_longvowel_map()
+
+    if not mapping:
+        return text
+
+    # 長い単語から順に置換（部分一致を防ぐため）
+    for hyphen_version in sorted(mapping.keys(), key=len, reverse=True):
+        if hyphen_version in text:
+            long_version = mapping[hyphen_version]
+            text = text.replace(hyphen_version, long_version)
+
+    return text
 
 
 def convert_circle_numbers(text: str) -> str:
@@ -177,9 +271,10 @@ def normalize_text(text: str, use_neologdn: bool = True) -> str:
     2. neologdnによる正規化（オプション）
     3. Unicode NFKC正規化
     4. 和暦→西暦変換
-    5. ハイフン・ダッシュの統一
-    6. カタカナ長音記号の誤用修正
-    7. 連続空白の削除
+    5. ハイフン→長音の修正（rawデータの入力ミス修正）
+    6. ハイフン・ダッシュの統一
+    7. カタカナ長音記号の誤用修正
+    8. 連続空白の削除
 
     Args:
         text: 正規化対象のテキスト
@@ -207,16 +302,20 @@ def normalize_text(text: str, use_neologdn: bool = True) -> str:
     # 4. 和暦→西暦変換
     text = convert_wareki_to_seireki(text)
 
-    # 5. ハイフン・ダッシュの統一
+    # 5. ハイフン→長音の修正（rawデータの入力ミス修正）
+    # 重要: この処理は normalize_hyphens() の前に実行する
+    text = fix_hyphen_to_longvowel(text)
+
+    # 6. ハイフン・ダッシュの統一
     text = normalize_hyphens(text)
 
-    # 6. カタカナ長音記号の誤用修正
+    # 7. カタカナ長音記号の誤用修正
     text = fix_katakana_hyphen_errors(text)
 
-    # 7. 連続空白を1つの空白に
+    # 8. 連続空白を1つの空白に
     text = re.sub(r'\s+', ' ', text)
 
-    # 8. 前後の空白を削除
+    # 9. 前後の空白を削除
     text = text.strip()
 
     return text
