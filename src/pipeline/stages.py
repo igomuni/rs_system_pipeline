@@ -188,8 +188,8 @@ class Stage02_Normalize(PipelineStage):
             # CSVを読み込み
             df = pd.read_csv(input_path, encoding='utf-8-sig')
 
-            # カラム名を正規化
-            df.columns = [normalize_column_name(col) for col in df.columns]
+            # カラム名を正規化（normalize_text で完全な正規化を実施）
+            df.columns = [normalize_text(col) for col in df.columns]
 
             # データを正規化（文字列型のカラムのみ）
             for col in df.columns:

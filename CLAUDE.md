@@ -34,6 +34,12 @@ python main.py
 # Run from specific stage
 python main.py --stage 2  # Stages: 1, 2, 3, 4
 
+# Process specific year only (2014-2023)
+python main.py --year 2023
+
+# Combine stage and year parameters
+python main.py --stage 3 --year 2023
+
 # Run as API server
 python main.py --server --host 0.0.0.0 --port 8000
 ```
