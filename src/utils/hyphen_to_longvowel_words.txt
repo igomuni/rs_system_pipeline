@@ -43,3 +43,18 @@
 トレーサビリティー	トレ-サビリティ-	検出2回, 誤用率0.6%
 ステークホルダー	ステ-クホルダ-	検出2回, 誤用率0.9%
 ホームページ	ホ-ムペ-ジ	検出2回, 誤用率0.0%
+
+# 2025年10月追加: 新たに発見されたパターン
+セブンイレブン	セブン‐イレブン	検出2回 (U+2010 HYPHEN)
+セブンイレブン	セブン-イレブン	002D
+セブンイレブン	セブンーイレブン	長音記号誤用 (U+30FC KATAKANA-HIRAGANA PROLONGED SOUND MARK)
+セブンイレブン	セブン－イレブン	全角ハイフン (U+FF0D FULLWIDTH HYPHEN-MINUS)
+ファシリテーター	ファシリテ―タ	検出6回 (U+2015 HORIZONTAL BAR)
+メニーコア	メニ―コア	検出6回 (U+2015 HORIZONTAL BAR)
+ビジネスサービス	ビジネスサ−ビス	検出5回 (U+2212 MINUS SIGN)
+サービス	サ‐ビス	検出1回 (U+2010 HYPHEN)
+サービス	サ−ビス	検出3回 (U+2212 MINUS SIGN)
+スポーツ	スポ―ツ	検出2回 (U+2015 HORIZONTAL BAR)
+プロモーション	プロモ―ション	検出3回 (U+2015 HORIZONTAL BAR)
+グループ	グル-プ	支出先リスト等で検出 (U+002D ASCII HYPHEN-MINUS)
+フリーデン	フリ-デン	組織名で検出 (U+002D ASCII HYPHEN-MINUS)

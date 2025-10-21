@@ -128,10 +128,6 @@ def fix_hyphen_to_longvowel(text: str) -> str:
     if not isinstance(text, str):
         return text
 
-    # ハイフンを含まない場合はスキップ
-    if '-' not in text:
-        return text
-
     # 辞書を読み込み
     mapping = load_hyphen_to_longvowel_map()
 
@@ -257,9 +253,14 @@ def fix_katakana_hyphen_errors(text: str) -> str:
 
     Returns:
         変換後のテキスト
+
+    注: この関数は無効化されています。
+    理由: 元データに誤用が存在せず、正しい表記（センター、コンピューター等）を
+    破壊するリスクが高いため。
     """
-    # カタカナの後の長音記号で、その後にカタカナが続かない場合は削除
-    return RE_KATAKANA_HYPHEN.sub(r'\1', text)
+    # 無効化: 正しい「センター」等を「センタ」に変換してしまう問題があるため
+    # return RE_KATAKANA_HYPHEN.sub(r'\1', text)
+    return text
 
 
 def normalize_text(text: str, use_neologdn: bool = True) -> str:
@@ -271,7 +272,7 @@ def normalize_text(text: str, use_neologdn: bool = True) -> str:
     2. neologdnによる正規化（オプション）
     3. Unicode NFKC正規化
     4. 和暦→西暦変換
-    5. ハイフン→長音の修正（rawデータの入力ミス修正）
+    5. ハイフン→長音の修正（rawデータの入力ミス修正）※neologdn/NFKC後に実行
     6. ハイフン・ダッシュの統一
     7. カタカナ長音記号の誤用修正
     8. 連続空白の削除
@@ -303,7 +304,8 @@ def normalize_text(text: str, use_neologdn: bool = True) -> str:
     text = convert_wareki_to_seireki(text)
 
     # 5. ハイフン→長音の修正（rawデータの入力ミス修正）
-    # 重要: この処理は normalize_hyphens() の前に実行する
+    # 重要: この処理は neologdn/NFKC正規化の後に実行する必要がある
+    # （半角カタカナを全角に変換してから辞書で置換するため）
     text = fix_hyphen_to_longvowel(text)
 
     # 6. ハイフン・ダッシュの統一
