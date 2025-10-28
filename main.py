@@ -199,6 +199,11 @@ def cli_main():
         help="Process only specific year (e.g., 2014). If not specified, process all years.",
     )
     parser.add_argument(
+        "--rs2024",
+        action="store_true",
+        help="Normalize RS2024 format data from data/download/RS_2024 (bypasses normal pipeline)",
+    )
+    parser.add_argument(
         "--server",
         action="store_true",
         help="Run as API server",
@@ -222,6 +227,26 @@ def cli_main():
         # APIサーバーとして起動
         import uvicorn
         uvicorn.run(app, host=args.host, port=args.port)
+    elif args.rs2024:
+        # RS2024データの正規化処理
+        _ensure_directories()
+
+        logger.info("Starting RS2024 data normalization")
+        logger.info("Data flow:")
+        logger.info("  1. Extract: data/download/RS_2024/*.zip -> output/raw/year_2024/")
+        logger.info("  2. Normalize: output/raw/year_2024/*.csv -> output/processed/year_2024/")
+
+        # scripts.normalize_rs2024 をインポートして実行
+        from scripts.normalize_rs2024 import normalize_rs2024_data
+
+        success = normalize_rs2024_data()
+
+        if success:
+            logger.info("RS2024 normalization completed successfully")
+            sys.exit(0)
+        else:
+            logger.error("RS2024 normalization failed")
+            sys.exit(1)
     else:
         # CLI実行: 必要なディレクトリを作成
         _ensure_directories()

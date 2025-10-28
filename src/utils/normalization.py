@@ -272,10 +272,11 @@ def normalize_text(text: str, use_neologdn: bool = True) -> str:
     2. neologdnによる正規化（オプション）
     3. Unicode NFKC正規化
     4. 和暦→西暦変換
-    5. ハイフン→長音の修正（rawデータの入力ミス修正）※neologdn/NFKC後に実行
-    6. ハイフン・ダッシュの統一
-    7. カタカナ長音記号の誤用修正
-    8. 連続空白の削除
+    5. 全角括弧→半角括弧の変換（（）→()）
+    6. ハイフン→長音の修正（rawデータの入力ミス修正）※neologdn/NFKC後に実行
+    7. ハイフン・ダッシュの統一
+    8. カタカナ長音記号の誤用修正
+    9. 連続空白の削除
 
     Args:
         text: 正規化対象のテキスト
@@ -303,21 +304,24 @@ def normalize_text(text: str, use_neologdn: bool = True) -> str:
     # 4. 和暦→西暦変換
     text = convert_wareki_to_seireki(text)
 
-    # 5. ハイフン→長音の修正（rawデータの入力ミス修正）
+    # 5. 全角括弧を半角に変換（NFKC正規化では変換されないため明示的に実施）
+    text = text.replace('（', '(').replace('）', ')')
+
+    # 6. ハイフン→長音の修正（rawデータの入力ミス修正）
     # 重要: この処理は neologdn/NFKC正規化の後に実行する必要がある
     # （半角カタカナを全角に変換してから辞書で置換するため）
     text = fix_hyphen_to_longvowel(text)
 
-    # 6. ハイフン・ダッシュの統一
+    # 7. ハイフン・ダッシュの統一
     text = normalize_hyphens(text)
 
-    # 7. カタカナ長音記号の誤用修正
+    # 8. カタカナ長音記号の誤用修正
     text = fix_katakana_hyphen_errors(text)
 
-    # 8. 連続空白を1つの空白に
+    # 9. 連続空白を1つの空白に
     text = re.sub(r'\s+', ' ', text)
 
-    # 9. 前後の空白を削除
+    # 10. 前後の空白を削除
     text = text.strip()
 
     return text
